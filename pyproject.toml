@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mazegen"
+version = "1.0.0"
+description = "A maze generation library with hex-encoded output and 42 pattern support."
+readme = "README.md"
+authors = [
+  { name = "Team A-Maze-Ing" }
+]
+license = "MIT"
+requires-python = ">=3.8"
+dependencies = []
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["mazegen*"]
+
+[tool.mypy]
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.flake8]
+max-line-length = 99
