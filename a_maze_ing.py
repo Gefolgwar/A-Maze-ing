@@ -218,15 +218,48 @@ def main() -> None:
         print(f"Error reading config: {exc}", file=sys.stderr)
         sys.exit(1)
 
-    width: int = int(config["WIDTH"])
-    height: int = int(config["HEIGHT"])
-    perfect: bool = config["PERFECT"].strip().lower() in ("true", "1", "yes")
-    entry: Tuple[int, int] = _parse_coord(config["ENTRY"])
-    exit_cell: Tuple[int, int] = _parse_coord(config["EXIT"])
+    try:
+        width: int = int(config["WIDTH"])
+    except ValueError:
+        print(f"Error: WIDTH must be an integer, got {config['WIDTH']!r}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        height: int = int(config["HEIGHT"])
+    except ValueError:
+        print(f"Error: HEIGHT must be an integer, got {config['HEIGHT']!r}", file=sys.stderr)
+        sys.exit(1)
+
+    _perfect_raw: str = config["PERFECT"].strip().lower()
+    if _perfect_raw not in ("true", "1", "yes", "false", "0", "no"):
+        print(
+            f"Error: PERFECT must be a boolean (true/false/yes/no/1/0), "
+            f"got {config['PERFECT']!r}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    perfect: bool = _perfect_raw in ("true", "1", "yes")
+
+    try:
+        entry: Tuple[int, int] = _parse_coord(config["ENTRY"])
+    except ValueError as exc:
+        print(f"Error: invalid ENTRY coordinate: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        exit_cell: Tuple[int, int] = _parse_coord(config["EXIT"])
+    except ValueError as exc:
+        print(f"Error: invalid EXIT coordinate: {exc}", file=sys.stderr)
+        sys.exit(1)
+
     output_path: str = config["OUTPUT_FILE"]
 
     # Mutable seed — incremented on each re-generation.
-    _seed: List[int] = [int(config["SEED"])]
+    try:
+        _seed: List[int] = [int(config["SEED"])]
+    except ValueError:
+        print(f"Error: SEED must be an integer, got {config['SEED']!r}", file=sys.stderr)
+        sys.exit(1)
     # Mutable algorithm — toggled on "Change algorithm" action.
     _algo: List[str] = ["backtracker"]
     _ALGO_LABELS: Dict[str, str] = {
