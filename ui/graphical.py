@@ -1,12 +1,12 @@
-"""Graphical maze rendering with pygame — animated generation + play mode."""
+"""Graphical maze rendering with MiniLibX (MLX) — animated generation + play mode."""
 
 from typing import Callable, Dict, Iterator, List, Optional, Set, Tuple
 
 try:
-    import pygame
-    _HAS_PYGAME: bool = True
+    from Mlx import Mlx
+    _HAS_MLX: bool = True
 except ImportError:
-    _HAS_PYGAME = False
+    _HAS_MLX = False
 
 NORTH: int = 0
 EAST: int = 1
@@ -23,6 +23,11 @@ def _hex_to_rgb(hex_color: str) -> Tuple[int, int, int]:
     return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
 
 
+def _rgb_to_color(r: int, g: int, b: int) -> int:
+    """Pack RGB into MLX colour integer (0x00RRGGBB)."""
+    return (r << 16) | (g << 8) | b
+
+
 _COLOR_PRESETS: List[Dict[str, str]] = [
     {"WallColor": "#FFFFFF", "SolutionColor": "#FF0000", "PathColor": "#00FF00"},
     {"WallColor": "#00AAFF", "SolutionColor": "#FFAA00", "PathColor": "#AAFFAA"},
@@ -35,19 +40,72 @@ _MENU_FG: Tuple[int, int, int] = (220, 220, 220)
 _MENU_HL: Tuple[int, int, int] = (255, 220, 50)
 _ANIM_COLOR: Tuple[int, int, int] = (0, 200, 255)
 _GAME_COLOR: Tuple[int, int, int] = (50, 220, 50)
-_PLAYER_COLOR: Tuple[int, int, int] = (255, 200, 0)        # player cell
-_WIN_COLOR: Tuple[int, int, int] = (0, 255, 128)            # win highlight
+_PLAYER_COLOR: Tuple[int, int, int] = (255, 200, 0)
+_WIN_COLOR: Tuple[int, int, int] = (0, 255, 128)
 
 _MIN_SPEED: int = 1
 _MAX_SPEED: int = 128
 
+# ── X11 key syms ─────────────────────────────────────────────────────────
+_KEY_ESC: int = 65307
+_KEY_Q: int = 113
+_KEY_R: int = 114
+_KEY_C: int = 99
+_KEY_P: int = 112
+_KEY_G: int = 103
+_KEY_1: int = 49
+_KEY_2: int = 50
+_KEY_3: int = 51
+_KEY_4: int = 52
+_KEY_5: int = 53
+_KEY_EQUAL: int = 61
+_KEY_PLUS_KP: int = 65451
+_KEY_MINUS: int = 45
+_KEY_MINUS_KP: int = 65453
+_KEY_UP: int = 65362
+_KEY_DOWN: int = 65364
+_KEY_LEFT: int = 65361
+_KEY_RIGHT: int = 65363
+
+
+# ── Module-level callbacks for MLX (CFUNCTYPE-compatible) ─────────────────
+
+def _on_key(keycode: int, state: object) -> None:  # type: ignore[type-arg]
+    """Handle key press events."""
+    if isinstance(state, GraphicalUI):
+        state.handle_key(keycode)
+
+
+def _on_mouse(button: int, x: int, y: int, state: object) -> None:  # type: ignore[type-arg]
+    """Handle mouse click events."""
+    if isinstance(state, GraphicalUI):
+        state.handle_mouse(button, x, y)
+
+
+def _on_loop(state: object) -> None:  # type: ignore[type-arg]
+    """Idle frame callback — advance animation and redraw."""
+    if isinstance(state, GraphicalUI):
+        state.handle_frame()
+
+
+def _on_expose(state: object) -> None:  # type: ignore[type-arg]
+    """Expose callback — mark for redraw."""
+    if isinstance(state, GraphicalUI):
+        state._needs_redraw = True
+
+
+def _on_destroy(state: object) -> None:  # type: ignore[type-arg]
+    """Window close (DestroyNotify) callback."""
+    if isinstance(state, GraphicalUI):
+        state._quit()
+
 
 class GraphicalUI:
-    """Pygame maze renderer.
+    """MiniLibX maze renderer.
 
     Maze build keys:
         1/R Re-gen   2 Algo   3 Shape   +/- speed
-        4/P path     5/C colors   6/Q/Esc quit
+        4/P path     5/C colors   Q/Esc quit
     Play mode (toggle with G):
         Arrow keys to move, step counter shown in menu.
     """
@@ -76,8 +134,8 @@ class GraphicalUI:
         current_algo: str = "Recursive Backtracker",
         current_shape: str = "Rectangle",
     ) -> None:
-        if not _HAS_PYGAME:
-            raise ImportError("pygame is required. pip install pygame")
+        if not _HAS_MLX:
+            raise ImportError("MLX is required. Install the mlx wheel.")
 
         self.hex_grid: List[List[int]] = hex_grid
         self.height: int = len(hex_grid)
@@ -120,6 +178,22 @@ class GraphicalUI:
         self.solution_color: Tuple[int, int, int] = (255, 0, 0)
         self.path_color: Tuple[int, int, int] = (0, 255, 0)
         self._apply_preset()
+
+        # MLX state (initialised in run())
+        self._mlx: Optional[object] = None
+        self._mlx_ptr: Optional[object] = None
+        self._win_ptr: Optional[object] = None
+        self._img_ptr: Optional[object] = None
+        self._img_data: Optional[memoryview] = None
+        self._img_bpp: int = 0
+        self._img_sl: int = 0
+        self._img_fmt: int = 0
+        self._maze_w: int = 0
+        self._maze_h: int = 0
+        self._win_w: int = 0
+        self._win_h: int = 0
+        self._menu_w: int = 220
+        self._needs_redraw: bool = True
 
     # ── Colour ───────────────────────────────────────────────────────────
 
@@ -168,77 +242,192 @@ class GraphicalUI:
             if (nr, nc) == self.exit_cell:
                 self._game_won = True
 
+    # ── Image buffer drawing ─────────────────────────────────────────────
+
+    def _pixel_bytes(self, r: int, g: int, b: int) -> bytes:
+        """Return the 4-byte pixel value for the current image format."""
+        if self._img_fmt == 0:  # B8G8R8A8
+            return bytes([b, g, r, 255])
+        return bytes([255, r, g, b])  # A8R8G8B8
+
+    def _put_pixel(self, x: int, y: int, r: int, g: int, b: int) -> None:
+        """Set a single pixel in the image buffer."""
+        if x < 0 or x >= self._win_w or y < 0 or y >= self._win_h:
+            return
+        bpp: int = self._img_bpp // 8
+        off: int = y * self._img_sl + x * bpp
+        px: bytes = self._pixel_bytes(r, g, b)
+        self._img_data[off:off + 4] = px  # type: ignore[index]
+
+    def _fill_rect(
+        self, x: int, y: int, w: int, h: int,
+        r: int, g: int, b: int,
+    ) -> None:
+        """Fill a rectangle in the image buffer."""
+        x1: int = max(0, x)
+        y1: int = max(0, y)
+        x2: int = min(self._win_w, x + w)
+        y2: int = min(self._win_h, y + h)
+        if x2 <= x1 or y2 <= y1:
+            return
+        bpp: int = self._img_bpp // 8
+        px: bytes = self._pixel_bytes(r, g, b)
+        row: bytes = px * (x2 - x1)
+        row_len: int = len(row)
+        sl: int = self._img_sl
+        data = self._img_data
+        for py in range(y1, y2):
+            off: int = py * sl + x1 * bpp
+            data[off:off + row_len] = row  # type: ignore[index]
+
+    def _draw_hline(
+        self, x1: int, x2: int, y: int, r: int, g: int, b: int,
+    ) -> None:
+        """Draw a horizontal line in the image buffer."""
+        if y < 0 or y >= self._win_h:
+            return
+        xa: int = max(0, min(x1, x2))
+        xb: int = min(self._win_w - 1, max(x1, x2))
+        if xa > xb:
+            return
+        bpp: int = self._img_bpp // 8
+        px: bytes = self._pixel_bytes(r, g, b)
+        row: bytes = px * (xb - xa + 1)
+        off: int = y * self._img_sl + xa * bpp
+        self._img_data[off:off + len(row)] = row  # type: ignore[index]
+
+    def _draw_vline(
+        self, x: int, y1: int, y2: int, r: int, g: int, b: int,
+    ) -> None:
+        """Draw a vertical line in the image buffer."""
+        if x < 0 or x >= self._win_w:
+            return
+        ya: int = max(0, min(y1, y2))
+        yb: int = min(self._win_h - 1, max(y1, y2))
+        if ya > yb:
+            return
+        bpp: int = self._img_bpp // 8
+        px: bytes = self._pixel_bytes(r, g, b)
+        sl: int = self._img_sl
+        data = self._img_data
+        for py in range(ya, yb + 1):
+            off: int = py * sl + x * bpp
+            data[off:off + 4] = px  # type: ignore[index]
+
     # ── Main loop ─────────────────────────────────────────────────────────
 
     def run(self) -> None:
-        pygame.init()
-        _MENU_W: int = 220
-        maze_w: int = self.width * self.cell_size + 1
-        maze_h: int = self.height * self.cell_size + 1
-        win_w: int = maze_w + _MENU_W
-        win_h: int = max(maze_h, 370)
-        screen: pygame.Surface = pygame.display.set_mode((win_w, win_h))
-        pygame.display.set_caption("A-Maze-Ing")
-        font: pygame.font.Font = pygame.font.SysFont("consolas", 15)
-        clock: pygame.time.Clock = pygame.time.Clock()
+        mlx = Mlx()
+        self._mlx = mlx
+        self._mlx_ptr = mlx.mlx_init()
+        if self._mlx_ptr is None:
+            raise RuntimeError("mlx_init() failed")
 
-        running: bool = True
-        while running:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    running = False
-                elif event.type == pygame.KEYDOWN:
-                    k = event.key
-                    # Arrow keys — play mode movement
-                    if self._game_mode:
-                        if k == pygame.K_UP:
-                            self._handle_player_move(NORTH)
-                        elif k == pygame.K_RIGHT:
-                            self._handle_player_move(EAST)
-                        elif k == pygame.K_DOWN:
-                            self._handle_player_move(SOUTH)
-                        elif k == pygame.K_LEFT:
-                            self._handle_player_move(WEST)
-                    # Global keys
-                    if k in (pygame.K_q, pygame.K_ESCAPE):
-                        running = False
-                    elif k == pygame.K_g:
-                        self._toggle_game_mode()
-                    elif not self._game_mode:
-                        if k in (pygame.K_1, pygame.K_r):
-                            self._trigger_anim(self.anim_regen_cb)
-                        elif k == pygame.K_2:
-                            self._trigger_anim(self.anim_algo_cb)
-                        elif k == pygame.K_3:
-                            self._trigger_anim(self.anim_shape_cb)
-                        elif k in (pygame.K_5, pygame.K_c):
-                            self._cycle_colors()
-                        elif k in (pygame.K_EQUALS, pygame.K_PLUS):
-                            self.anim_speed = min(
-                                _MAX_SPEED, self.anim_speed * 2
-                            )
-                        elif k == pygame.K_MINUS:
-                            self.anim_speed = max(
-                                _MIN_SPEED, self.anim_speed // 2
-                            )
-                    # Key 4 / P works in both normal and game mode
-                    if k in (pygame.K_4, pygame.K_p) and not self._is_animating:
-                        self.show_solution = not self.show_solution
-                elif event.type == pygame.MOUSEBUTTONDOWN:
-                    mx, my = event.pos
-                    if mx > maze_w:
-                        self._handle_menu_click(my, font)
+        self._maze_w = self.width * self.cell_size + 1
+        self._maze_h = self.height * self.cell_size + 1
+        self._win_w = self._maze_w + self._menu_w
+        self._win_h = max(self._maze_h, 370)
 
-            if self._is_animating and self._anim_iter is not None:
-                if self._advance_anim():
-                    self._finish_anim()
+        self._win_ptr = mlx.mlx_new_window(
+            self._mlx_ptr, self._win_w, self._win_h, "A-Maze-Ing"
+        )
+        if self._win_ptr is None:
+            raise RuntimeError("mlx_new_window() failed")
 
-            screen.fill(self.bg_color)
-            self._draw_maze(screen)
-            self._draw_menu(screen, maze_w, win_h, font)
-            pygame.display.flip()
-            clock.tick(60)
-        pygame.quit()
+        # Image buffer covering the full window
+        self._img_ptr = mlx.mlx_new_image(
+            self._mlx_ptr, self._win_w, self._win_h,
+        )
+        img_info = mlx.mlx_get_data_addr(self._img_ptr)
+        self._img_data = img_info[0]
+        self._img_bpp = img_info[1]
+        self._img_sl = img_info[2]
+        self._img_fmt = img_info[3]
+
+        # Register hooks
+        # Key press (X11 event 2) for responsiveness
+        mlx.mlx_hook(self._win_ptr, 2, 0, _on_key, self)
+        mlx.mlx_mouse_hook(self._win_ptr, _on_mouse, self)
+        mlx.mlx_expose_hook(self._win_ptr, _on_expose, self)
+        mlx.mlx_loop_hook(self._mlx_ptr, _on_loop, self)
+        # Window close (X11 DestroyNotify = event 17)
+        mlx.mlx_hook(self._win_ptr, 17, 0, _on_destroy, self)
+
+        self._needs_redraw = True
+        mlx.mlx_loop(self._mlx_ptr)
+
+        # Cleanup after loop exits
+        mlx.mlx_destroy_image(self._mlx_ptr, self._img_ptr)
+        mlx.mlx_destroy_window(self._mlx_ptr, self._win_ptr)
+        mlx.mlx_release(self._mlx_ptr)
+
+    # ── Event handlers ────────────────────────────────────────────────────
+
+    def handle_key(self, keycode: int) -> None:
+        """Handle a key press event."""
+        # Arrow keys — play mode movement
+        if self._game_mode:
+            if keycode == _KEY_UP:
+                self._handle_player_move(NORTH)
+                self._needs_redraw = True
+            elif keycode == _KEY_RIGHT:
+                self._handle_player_move(EAST)
+                self._needs_redraw = True
+            elif keycode == _KEY_DOWN:
+                self._handle_player_move(SOUTH)
+                self._needs_redraw = True
+            elif keycode == _KEY_LEFT:
+                self._handle_player_move(WEST)
+                self._needs_redraw = True
+
+        # Global keys
+        if keycode in (_KEY_Q, _KEY_ESC):
+            self._quit()
+        elif keycode == _KEY_G:
+            self._toggle_game_mode()
+            self._needs_redraw = True
+        elif not self._game_mode:
+            if keycode in (_KEY_1, _KEY_R):
+                self._trigger_anim(self.anim_regen_cb)
+            elif keycode == _KEY_2:
+                self._trigger_anim(self.anim_algo_cb)
+            elif keycode == _KEY_3:
+                self._trigger_anim(self.anim_shape_cb)
+            elif keycode in (_KEY_5, _KEY_C):
+                self._cycle_colors()
+                self._needs_redraw = True
+            elif keycode in (_KEY_EQUAL, _KEY_PLUS_KP):
+                self.anim_speed = min(_MAX_SPEED, self.anim_speed * 2)
+                self._needs_redraw = True
+            elif keycode in (_KEY_MINUS, _KEY_MINUS_KP):
+                self.anim_speed = max(_MIN_SPEED, self.anim_speed // 2)
+                self._needs_redraw = True
+
+        # Key 4 / P works in both modes
+        if keycode in (_KEY_4, _KEY_P) and not self._is_animating:
+            self.show_solution = not self.show_solution
+            self._needs_redraw = True
+
+    def handle_mouse(self, button: int, x: int, y: int) -> None:
+        """Handle a mouse click event."""
+        if x > self._maze_w:
+            self._handle_menu_click(y)
+
+    def handle_frame(self) -> None:
+        """Called on each idle loop iteration."""
+        if self._is_animating and self._anim_iter is not None:
+            if self._advance_anim():
+                self._finish_anim()
+            self._needs_redraw = True
+
+        if self._needs_redraw:
+            self._redraw()
+            self._needs_redraw = False
+
+    def _quit(self) -> None:
+        """Exit the MLX loop."""
+        if self._mlx is not None and self._mlx_ptr is not None:
+            self._mlx.mlx_loop_exit(self._mlx_ptr)  # type: ignore[union-attr]
 
     # ── Animation control ─────────────────────────────────────────────────
 
@@ -291,7 +480,7 @@ class GraphicalUI:
 
     # ── Menu ─────────────────────────────────────────────────────────────
 
-    def _handle_menu_click(self, y: int, font: pygame.font.Font) -> None:
+    def _handle_menu_click(self, y: int) -> None:
         actions = [
             lambda: self._trigger_anim(self.anim_regen_cb),
             lambda: self._trigger_anim(self.anim_algo_cb),
@@ -303,50 +492,62 @@ class GraphicalUI:
         start_y, item_h = 80, 34
         for i, action in enumerate(actions):
             if start_y + i * item_h <= y < start_y + (i + 1) * item_h:
-                # In game mode only path-toggle (i=3) and game-toggle (i=5) allowed
+                # In game mode only path-toggle (i=3) and game-toggle (i=5)
                 if self._game_mode and i not in (3, 5):
                     return
                 if i == 3 and self._is_animating:
                     return
                 action()
+                self._needs_redraw = True
                 break
 
-    def _draw_menu(
-        self,
-        screen: pygame.Surface,
-        x_offset: int,
-        win_h: int,
-        font: pygame.font.Font,
-    ) -> None:
-        pygame.draw.rect(screen, _MENU_BG, (x_offset, 0, 220, win_h))
-        pygame.draw.line(
-            screen, (100, 100, 100), (x_offset, 0), (x_offset, win_h)
+    # ── Full redraw ──────────────────────────────────────────────────────
+
+    def _redraw(self) -> None:
+        """Redraw the entire window: maze image + menu text."""
+        mlx = self._mlx
+        # Fill maze area with background
+        self._fill_rect(0, 0, self._maze_w, self._win_h, *self.bg_color)
+        # Fill menu area
+        self._fill_rect(self._maze_w, 0, self._menu_w, self._win_h, *_MENU_BG)
+        # Separator line
+        self._draw_vline(self._maze_w, 0, self._win_h - 1, 100, 100, 100)
+        # Separator under speed
+        self._draw_hline(
+            self._maze_w + 4, self._maze_w + 216, 56, 60, 60, 60,
         )
+        # Draw maze cells
+        self._draw_maze()
+        # Blit image to window
+        mlx.mlx_put_image_to_window(  # type: ignore[union-attr]
+            self._mlx_ptr, self._win_ptr, self._img_ptr, 0, 0,
+        )
+        # Draw text on top of the image
+        self._draw_menu_text()
+
+    def _draw_menu_text(self) -> None:
+        """Draw the side-panel text using mlx_string_put."""
+        m = self._mlx
+        mp = self._mlx_ptr
+        wp = self._win_ptr
+        x: int = self._maze_w + 8
 
         # Title
         if self._game_mode:
-            title = "PLAY MODE"
-            title_col = _GAME_COLOR
+            title, tc = "PLAY MODE", _rgb_to_color(*_GAME_COLOR)
         elif self._is_animating:
-            title = "BUILDING..."
-            title_col = _ANIM_COLOR
+            title, tc = "BUILDING...", _rgb_to_color(*_ANIM_COLOR)
         else:
-            title = "A-Maze-ing"
-            title_col = _MENU_HL
-        screen.blit(font.render(title, True, title_col), (x_offset + 4, 6))
+            title, tc = "A-Maze-ing", _rgb_to_color(*_MENU_HL)
+        m.mlx_string_put(mp, wp, x, 16, tc, title)  # type: ignore[union-attr]
 
-        # Speed
-        speed_col = _ANIM_COLOR if self._is_animating else _MENU_FG
-        screen.blit(
-            font.render(
-                f"+/- Speed: {self.anim_speed} step/fr", True, speed_col
-            ),
-            (x_offset + 4, 26),
-        )
-        pygame.draw.line(
-            screen, (60, 60, 60), (x_offset + 4, 56), (x_offset + 216, 56)
+        # Speed indicator
+        sc = _rgb_to_color(*(_ANIM_COLOR if self._is_animating else _MENU_FG))
+        m.mlx_string_put(  # type: ignore[union-attr]
+            mp, wp, x, 40, sc, f"+/- Speed: {self.anim_speed} step/fr",
         )
 
+        # Menu items
         algo_short: str = self.current_algo[:13]
         shape_short: str = self.current_shape[:10]
         items = [
@@ -361,51 +562,44 @@ class GraphicalUI:
         start_y, item_h = 80, 34
         for i, label in enumerate(items):
             if self._game_mode and i == 5:
-                col = _GAME_COLOR
+                col = _rgb_to_color(*_GAME_COLOR)
             elif self._is_animating and i < 3:
-                col = _ANIM_COLOR
+                col = _rgb_to_color(*_ANIM_COLOR)
             else:
-                col = _MENU_FG
-            screen.blit(
-                font.render(label, True, col),
-                (x_offset + 8, start_y + i * item_h),
+                col = _rgb_to_color(*_MENU_FG)
+            m.mlx_string_put(  # type: ignore[union-attr]
+                mp, wp, x, start_y + i * item_h + 14, col, label,
             )
 
         # Play-mode stats
         if self._game_mode:
             sep_y: int = start_y + len(items) * item_h + 6
-            pygame.draw.line(
-                screen, (60, 60, 60),
-                (x_offset + 4, sep_y), (x_offset + 216, sep_y)
-            )
+            # Draw separator line into the already-blitted image area
             steps_label: str = f"Steps: {self._player_steps}"
-            steps_col = _WIN_COLOR if self._game_won else _GAME_COLOR
-            screen.blit(
-                font.render(steps_label, True, steps_col),
-                (x_offset + 8, sep_y + 6),
+            steps_c = _rgb_to_color(
+                *(_WIN_COLOR if self._game_won else _GAME_COLOR)
+            )
+            m.mlx_string_put(  # type: ignore[union-attr]
+                mp, wp, x, sep_y + 18, steps_c, steps_label,
             )
             if self._game_won:
-                screen.blit(
-                    font.render("*** YOU WIN! ***", True, _WIN_COLOR),
-                    (x_offset + 8, sep_y + 26),
+                m.mlx_string_put(  # type: ignore[union-attr]
+                    mp, wp, x, sep_y + 38,
+                    _rgb_to_color(*_WIN_COLOR), "*** YOU WIN! ***",
                 )
-                screen.blit(
-                    font.render(
-                        "Press G to play again", True, _MENU_FG
-                    ),
-                    (x_offset + 8, sep_y + 46),
+                m.mlx_string_put(  # type: ignore[union-attr]
+                    mp, wp, x, sep_y + 58,
+                    _rgb_to_color(*_MENU_FG), "Press G to play again",
                 )
             else:
-                screen.blit(
-                    font.render(
-                        "Arrows: navigate", True, _MENU_FG
-                    ),
-                    (x_offset + 8, sep_y + 26),
+                m.mlx_string_put(  # type: ignore[union-attr]
+                    mp, wp, x, sep_y + 38,
+                    _rgb_to_color(*_MENU_FG), "Arrows: navigate",
                 )
 
     # ── Maze drawing ─────────────────────────────────────────────────────
 
-    def _draw_maze(self, screen: pygame.Surface) -> None:
+    def _draw_maze(self) -> None:
         cs: int = self.cell_size
         for r in range(self.height):
             for c in range(self.width):
@@ -417,41 +611,27 @@ class GraphicalUI:
 
                 # Fill
                 if (r, c) in self.blocked_cells:
-                    pygame.draw.rect(
-                        screen, _BLOCKED_COLOR, (x + 1, y + 1, cs - 1, cs - 1)
+                    self._fill_rect(
+                        x + 1, y + 1, cs - 1, cs - 1, *_BLOCKED_COLOR,
                     )
                 elif self._game_mode and (r, c) == self._player_pos:
                     col = _WIN_COLOR if self._game_won else _PLAYER_COLOR
-                    pygame.draw.rect(
-                        screen, col, (x + 2, y + 2, cs - 3, cs - 3)
-                    )
+                    self._fill_rect(x + 2, y + 2, cs - 3, cs - 3, *col)
                 elif (r, c) in (self.entry, self.exit_cell):
-                    pygame.draw.rect(
-                        screen, self.path_color,
-                        (x + 1, y + 1, cs - 1, cs - 1)
+                    self._fill_rect(
+                        x + 1, y + 1, cs - 1, cs - 1, *self.path_color,
                     )
                 elif self.show_solution and (r, c) in self.solution_cells:
-                    pygame.draw.rect(
-                        screen, self.solution_color,
-                        (x + 1, y + 1, cs - 1, cs - 1)
+                    self._fill_rect(
+                        x + 1, y + 1, cs - 1, cs - 1, *self.solution_color,
                     )
 
                 # Walls
                 if not (cell & (1 << NORTH)):
-                    pygame.draw.line(
-                        screen, self.wall_color, (x, y), (x + cs, y)
-                    )
+                    self._draw_hline(x, x + cs, y, *self.wall_color)
                 if not (cell & (1 << EAST)):
-                    pygame.draw.line(
-                        screen, self.wall_color,
-                        (x + cs, y), (x + cs, y + cs)
-                    )
+                    self._draw_vline(x + cs, y, y + cs, *self.wall_color)
                 if not (cell & (1 << SOUTH)):
-                    pygame.draw.line(
-                        screen, self.wall_color,
-                        (x, y + cs), (x + cs, y + cs)
-                    )
+                    self._draw_hline(x, x + cs, y + cs, *self.wall_color)
                 if not (cell & (1 << WEST)):
-                    pygame.draw.line(
-                        screen, self.wall_color, (x, y), (x, y + cs)
-                    )
+                    self._draw_vline(x, y, y + cs, *self.wall_color)

@@ -2,5 +2,5 @@ flake8
 mypy
 pytest
 colorama
-pygame
 build
+# MLX: pip install mlx_CLXV-2.2-py3-<platform>-any.whl

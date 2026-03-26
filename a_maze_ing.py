@@ -443,7 +443,7 @@ def main() -> None:
             )
             gui.run()
         except ImportError:
-            print("pygame not available, falling back to terminal.", file=sys.stderr)
+            print("MLX not available, falling back to terminal.", file=sys.stderr)
             display_mode = "terminal"
 
     if display_mode == "terminal":
