@@ -129,4 +129,4 @@ class TestOutputFile:
         assert "Entry:" in lines[4]
         assert "Exit:" in lines[5]
         # Solution.
-        assert "E E S S" in lines[6]
+        assert lines[6].strip() == "EESS"

@@ -169,7 +169,7 @@ def write_output(
         fh.write("\n")
         fh.write(f"Entry: {entry[1]},{entry[0]}\n")
         fh.write(f"Exit: {exit_cell[1]},{exit_cell[0]}\n")
-        fh.write(f"Solution: {solution if solution else 'NO PATH'}\n")
+        fh.write(f"{solution.replace(' ', '') if solution else 'NO PATH'}\n")
 
 
 # ---------------------------------------------------------------------------
