@@ -3,7 +3,7 @@
 from typing import Callable, Dict, Iterator, List, Optional, Set, Tuple
 
 try:
-    from Mlx import Mlx
+    from mlx.mlx import Mlx
     _HAS_MLX: bool = True
 except ImportError:
     _HAS_MLX = False
@@ -326,7 +326,7 @@ class GraphicalUI:
         self._maze_w = self.width * self.cell_size + 1
         self._maze_h = self.height * self.cell_size + 1
         self._win_w = self._maze_w + self._menu_w
-        self._win_h = max(self._maze_h, 370)
+        self._win_h = max(self._maze_h, 410)
 
         self._win_ptr = mlx.mlx_new_window(
             self._mlx_ptr, self._win_w, self._win_h, "A-Maze-Ing"
@@ -346,12 +346,12 @@ class GraphicalUI:
 
         # Register hooks
         # Key press (X11 event 2) for responsiveness
-        mlx.mlx_hook(self._win_ptr, 2, 0, _on_key, self)
+        mlx.mlx_hook(self._win_ptr, 2, 1, _on_key, self)
         mlx.mlx_mouse_hook(self._win_ptr, _on_mouse, self)
         mlx.mlx_expose_hook(self._win_ptr, _on_expose, self)
         mlx.mlx_loop_hook(self._mlx_ptr, _on_loop, self)
         # Window close (X11 DestroyNotify = event 17)
-        mlx.mlx_hook(self._win_ptr, 17, 0, _on_destroy, self)
+        mlx.mlx_hook(self._win_ptr, 33, 0, _on_destroy, self)
 
         self._needs_redraw = True
         mlx.mlx_loop(self._mlx_ptr)

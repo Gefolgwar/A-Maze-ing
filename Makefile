@@ -5,7 +5,7 @@ install:
 	pip install -e .
 
 run:
-	python a_maze_ing.py config.txt
+	python3 a_maze_ing.py config.txt
 
 lint:
 	flake8 --max-line-length 99 src/ solver/ ui/ a_maze_ing.py tests/
