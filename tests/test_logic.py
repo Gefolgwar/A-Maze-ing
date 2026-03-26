@@ -84,15 +84,15 @@ class TestHexEncoding:
                         f"W/E mismatch at ({c},{r})"
 
     def test_border_walls_present(self) -> None:
-        """Outer border of the maze should have walls (bits = 0)."""
+        """Outer border of the maze should have walls (bits = 1)."""
         gen: MazeGenerator = MazeGenerator(10, 10, seed=42)
         g: List[List[int]] = gen.to_hex_format()
         for c in range(10):
-            assert (g[0][c] & 1) == 0, f"Top border open at col {c}"       # North
-            assert (g[9][c] & 4) == 0, f"Bottom border open at col {c}"    # South
+            assert (g[0][c] & 1) != 0, f"Top border open at col {c}"       # North
+            assert (g[9][c] & 4) != 0, f"Bottom border open at col {c}"    # South
         for r in range(10):
-            assert (g[r][0] & 8) == 0, f"Left border open at row {r}"      # West
-            assert (g[r][9] & 2) == 0, f"Right border open at row {r}"     # East
+            assert (g[r][0] & 8) != 0, f"Left border open at row {r}"      # West
+            assert (g[r][9] & 2) != 0, f"Right border open at row {r}"     # East
 
 
 class TestPattern42:
@@ -105,7 +105,7 @@ class TestPattern42:
         grid: List[List[int]] = gen.to_hex_format()
         assert len(blocked) > 0, "No 42 pattern found"
         for r, c in blocked:
-            assert grid[r][c] == 0, f"Blocked cell ({r},{c}) should be 0x0"
+            assert grid[r][c] == 0xF, f"Blocked cell ({r},{c}) should be 0xF"
 
     def test_too_small_raises(self) -> None:
         """Maze too small for 42 pattern should raise ValueError."""
@@ -159,7 +159,7 @@ class TestPerfectMaze:
         while queue:
             r, c = queue.popleft()
             for bit, (dr, dc) in deltas.items():
-                if g[r][c] & (1 << bit):
+                if not (g[r][c] & (1 << bit)):  # bit=0 means open
                     nr, nc = r + dr, c + dc
                     if (nr, nc) not in visited:
                         visited.add((nr, nc))

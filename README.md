@@ -84,7 +84,7 @@ Each cell is a 4-bit value:
 | 2   | South     | 4     |
 | 3   | West      | 8     |
 
-A set bit means the passage is **open** (no wall). For example, `0xA` = `1010` = South and West open.
+A set bit means the wall is **closed** (present). For example, `0x3` = `0011` = North and East walls closed, South and West open. `0xA` = `1010` = East and West walls closed.
 
 ## Makefile Targets
 

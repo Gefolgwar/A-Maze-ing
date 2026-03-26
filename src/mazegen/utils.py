@@ -12,6 +12,7 @@ class Coord(NamedTuple):
 
 # Direction constants — index matches bit position in hex encoding.
 # Bit 0 = North, Bit 1 = East, Bit 2 = South, Bit 3 = West.
+# A set bit (1) means the wall is closed (present).
 NORTH: int = 0
 EAST: int = 1
 SOUTH: int = 2
@@ -90,7 +91,7 @@ def debug_render_walls(hex_grid: List[List[int]]) -> None:
         top_line: str = ""
         for c in range(width):
             cell: int = hex_grid[r][c]
-            has_north: bool = (cell & (1 << NORTH)) == 0  # bit=0 → wall
+            has_north: bool = bool(cell & (1 << NORTH))  # bit=1 → wall
             top_line += "+" + ("--" if has_north else "  ")
         top_line += "+"
         print(top_line)
@@ -99,11 +100,11 @@ def debug_render_walls(hex_grid: List[List[int]]) -> None:
         mid_line: str = ""
         for c in range(width):
             cell = hex_grid[r][c]
-            has_west: bool = (cell & (1 << WEST)) == 0
+            has_west: bool = bool(cell & (1 << WEST))
             mid_line += ("|" if has_west else " ") + "  "
         # Right-most wall of last column
         last_cell: int = hex_grid[r][width - 1]
-        has_east: bool = (last_cell & (1 << EAST)) == 0
+        has_east: bool = bool(last_cell & (1 << EAST))
         mid_line += "|" if has_east else " "
         print(mid_line)
 
@@ -111,7 +112,7 @@ def debug_render_walls(hex_grid: List[List[int]]) -> None:
     bottom_line: str = ""
     for c in range(width):
         cell = hex_grid[height - 1][c]
-        has_south: bool = (cell & (1 << SOUTH)) == 0
+        has_south: bool = bool(cell & (1 << SOUTH))
         bottom_line += "+" + ("--" if has_south else "  ")
     bottom_line += "+"
     print(bottom_line)

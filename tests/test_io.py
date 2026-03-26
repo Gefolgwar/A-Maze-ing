@@ -109,9 +109,9 @@ class TestOutputFile:
     def test_output_format(self, tmp_path: object) -> None:
         """Output file should match the expected format."""
         grid: List[List[int]] = [
-            [0x6, 0xC, 0xA],
-            [0x5, 0x3, 0x9],
-            [0x3, 0xA, 0x9],
+            [0x9, 0x3, 0x5],
+            [0xA, 0xC, 0x6],
+            [0xC, 0x5, 0x6],
         ]
         p = os.path.join(str(tmp_path), "output.txt")
         write_output(p, grid, entry=(0, 0), exit_cell=(2, 2), solution="E E S S")
@@ -120,9 +120,9 @@ class TestOutputFile:
             lines: List[str] = fh.readlines()
 
         # Hex rows.
-        assert lines[0].strip() == "6CA"
-        assert lines[1].strip() == "539"
-        assert lines[2].strip() == "3A9"
+        assert lines[0].strip() == "935"
+        assert lines[1].strip() == "AC6"
+        assert lines[2].strip() == "C56"
         # Empty separator line.
         assert lines[3].strip() == ""
         # Entry/Exit.

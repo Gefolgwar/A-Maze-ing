@@ -107,7 +107,7 @@ class TerminalUI:
                     top += "   "
                 else:
                     cell: int = self.hex_grid[r][c]
-                    has_north: bool = not bool(cell & (1 << NORTH))
+                    has_north: bool = bool(cell & (1 << NORTH))
                     top += wc + "+" + ("--" if has_north else "  ") + _RESET
             last: int = self.width - 1
             top += " " if (r, last) in self.outside_cells else wc + "+" + _RESET
@@ -120,7 +120,7 @@ class TerminalUI:
                     mid += "   "
                 else:
                     cell = self.hex_grid[r][c]
-                    has_west: bool = not bool(cell & (1 << WEST))
+                    has_west: bool = bool(cell & (1 << WEST))
                     mid += wc + ("|" if has_west else " ") + _RESET
                     if (r, c) in self.blocked_cells:
                         mid += grey + "▓▓" + _RESET
@@ -136,7 +136,7 @@ class TerminalUI:
                 mid += " "
             else:
                 last_cell: int = self.hex_grid[r][last]
-                has_east: bool = not bool(last_cell & (1 << EAST))
+                has_east: bool = bool(last_cell & (1 << EAST))
                 mid += wc + ("|" if has_east else " ") + _RESET
             lines.append(mid)
 
@@ -148,7 +148,7 @@ class TerminalUI:
                 bottom += "   "
             else:
                 cell = self.hex_grid[last_row][c]
-                has_south: bool = not bool(cell & (1 << SOUTH))
+                has_south: bool = bool(cell & (1 << SOUTH))
                 bottom += wc + "+" + ("--" if has_south else "  ") + _RESET
         last = self.width - 1
         bottom += (

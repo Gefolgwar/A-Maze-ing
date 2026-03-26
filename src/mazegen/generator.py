@@ -302,13 +302,13 @@ class MazeGenerator:
 
         Encoding per cell:
 
-        * Bit 0 (1) → North open
-        * Bit 1 (2) → East open
-        * Bit 2 (4) → South open
-        * Bit 3 (8) → West open
+        * Bit 0 (1) → North wall closed
+        * Bit 1 (2) → East wall closed
+        * Bit 2 (4) → South wall closed
+        * Bit 3 (8) → West wall closed
 
-        A *wall present* → corresponding bit is **0**.
-        A *wall absent*  → corresponding bit is **1**.
+        A *wall present* → corresponding bit is **1**.
+        A *wall absent*  → corresponding bit is **0**.
 
         Returns:
             ``height × width`` list of ints in ``[0, 15]``.
@@ -322,13 +322,13 @@ class MazeGenerator:
             for c in range(self.width):
                 val: int = 0
                 walls: List[bool] = self._grid[r][c]
-                if not walls[NORTH]:
+                if walls[NORTH]:
                     val |= 1 << NORTH   # bit 0
-                if not walls[EAST]:
+                if walls[EAST]:
                     val |= 1 << EAST    # bit 1
-                if not walls[SOUTH]:
+                if walls[SOUTH]:
                     val |= 1 << SOUTH   # bit 2
-                if not walls[WEST]:
+                if walls[WEST]:
                     val |= 1 << WEST    # bit 3
                 row_vals.append(val)
             result.append(row_vals)

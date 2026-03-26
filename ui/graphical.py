@@ -227,8 +227,8 @@ class GraphicalUI:
             return
         r, c = self._player_pos
         cell: int = self.hex_grid[r][c]
-        if not (cell & (1 << direction)):
-            return  # wall blocks movement
+        if cell & (1 << direction):
+            return  # wall blocks movement (bit=1 → closed)
         dr, dc = _DIR_DELTA[direction]
         nr, nc = r + dr, c + dc
         if (
@@ -627,11 +627,11 @@ class GraphicalUI:
                     )
 
                 # Walls
-                if not (cell & (1 << NORTH)):
+                if cell & (1 << NORTH):
                     self._draw_hline(x, x + cs, y, *self.wall_color)
-                if not (cell & (1 << EAST)):
+                if cell & (1 << EAST):
                     self._draw_vline(x + cs, y, y + cs, *self.wall_color)
-                if not (cell & (1 << SOUTH)):
+                if cell & (1 << SOUTH):
                     self._draw_hline(x, x + cs, y + cs, *self.wall_color)
-                if not (cell & (1 << WEST)):
+                if cell & (1 << WEST):
                     self._draw_vline(x, y, y + cs, *self.wall_color)

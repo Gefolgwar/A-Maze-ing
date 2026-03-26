@@ -34,10 +34,10 @@ def solve(
 
     The ``hex_grid`` uses the standard bitwise encoding:
 
-    * Bit 0 (``1``) → North open
-    * Bit 1 (``2``) → East open
-    * Bit 2 (``4``) → South open
-    * Bit 3 (``8``) → West open
+    * Bit 0 (``1``) → North wall closed
+    * Bit 1 (``2``) → East wall closed
+    * Bit 2 (``4``) → South wall closed
+    * Bit 3 (``8``) → West wall closed
 
     Args:
         hex_grid: 2-D list of ints (0–15) encoding cell walls.
@@ -72,8 +72,8 @@ def solve(
         cell_val: int = hex_grid[r][c]
 
         for direction, (dr, dc) in DIRECTION_DELTA.items():
-            # Check if the direction is open (bit set).
-            if not (cell_val & (1 << direction)):
+            # Check if the direction is open (bit=0 means open).
+            if cell_val & (1 << direction):
                 continue
             nr: int = r + dr
             nc: int = c + dc
