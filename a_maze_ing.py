@@ -12,7 +12,7 @@ Usage::
 import configparser
 import os
 import sys
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple, Any
 
 from mazegen import MazeGenerator
 from solver.pathfinder import solve as solve_maze
@@ -221,13 +221,15 @@ def main() -> None:
     try:
         width: int = int(config["WIDTH"])
     except ValueError:
-        print(f"Error: WIDTH must be an integer, got {config['WIDTH']!r}", file=sys.stderr)
+        print(f"Error: WIDTH must be an integer, got {config['WIDTH']!r}",
+              file=sys.stderr)
         sys.exit(1)
 
     try:
         height: int = int(config["HEIGHT"])
     except ValueError:
-        print(f"Error: HEIGHT must be an integer, got {config['HEIGHT']!r}", file=sys.stderr)
+        print(f"Error: HEIGHT must be an integer, got {config['HEIGHT']!r}",
+              file=sys.stderr)
         sys.exit(1)
 
     _perfect_raw: str = config["PERFECT"].strip().lower()
@@ -258,7 +260,8 @@ def main() -> None:
     try:
         _seed: List[int] = [int(config["SEED"])]
     except ValueError:
-        print(f"Error: SEED must be an integer, got {config['SEED']!r}", file=sys.stderr)
+        print(f"Error: SEED must be an integer, got {config['SEED']!r}",
+              file=sys.stderr)
         sys.exit(1)
     # Mutable algorithm — toggled on "Change algorithm" action.
     _algo: List[str] = ["backtracker"]
@@ -298,7 +301,7 @@ def main() -> None:
             Set[Tuple[int, int]],
         ]
     ]:
-        """Run the generator and solver; return (grid, sol, blocked, outside)."""
+        """Run generator and solver; return (grid, sol, blocked, outside)."""
         eff_entry: Tuple[int, int] = _entry[0]
         eff_exit: Tuple[int, int] = _exit[0]
         try:
@@ -343,7 +346,8 @@ def main() -> None:
         new_grid, new_sol, new_blocked, new_outside = res
         new_sol_str: Optional[str] = solve_maze(new_grid, _entry[0], _exit[0])
         try:
-            write_output(output_path, new_grid, _entry[0], _exit[0], new_sol_str)
+            write_output(output_path, new_grid, _entry[0], _exit[0],
+                         new_sol_str)
         except OSError:
             pass
         return new_grid, new_sol, new_blocked, new_outside
@@ -358,10 +362,12 @@ def main() -> None:
         new_grid, new_sol, new_blocked, new_outside = res
         new_sol_str: Optional[str] = solve_maze(new_grid, _entry[0], _exit[0])
         try:
-            write_output(output_path, new_grid, _entry[0], _exit[0], new_sol_str)
+            write_output(output_path, new_grid, _entry[0], _exit[0],
+                         new_sol_str)
         except OSError:
             pass
-        return new_grid, new_sol, new_blocked, new_outside, _ALGO_LABELS[_algo[0]]
+        return (new_grid, new_sol, new_blocked, new_outside,
+                _ALGO_LABELS[_algo[0]])
 
     def change_shape_callback() -> Optional[tuple]:  # type: ignore[type-arg]
         """Toggle shape; auto-adjust entry/exit for diamond; return 7-tuple."""
@@ -380,7 +386,8 @@ def main() -> None:
         new_grid, new_sol, new_blocked, new_outside = res
         new_sol_str: Optional[str] = solve_maze(new_grid, _entry[0], _exit[0])
         try:
-            write_output(output_path, new_grid, _entry[0], _exit[0], new_sol_str)
+            write_output(output_path, new_grid, _entry[0], _exit[0],
+                         new_sol_str)
         except OSError:
             pass
         return (
@@ -390,7 +397,7 @@ def main() -> None:
 
     # --- Animation callbacks (graphical UI only) ----------------------------
 
-    def _make_anim_iter(seed: int) -> Optional[tuple]:  # type: ignore[type-arg]
+    def _make_anim_iter(seed: int) -> Optional[Tuple[Any, ...]]:
         """Create a step iterator for animated generation.
 
         Returns an 8-tuple:
@@ -476,7 +483,8 @@ def main() -> None:
             )
             gui.run()
         except ImportError:
-            print("MLX not available, falling back to terminal.", file=sys.stderr)
+            print("MLX not available, falling back to terminal.",
+                  file=sys.stderr)
             display_mode = "terminal"
 
     if display_mode == "terminal":
