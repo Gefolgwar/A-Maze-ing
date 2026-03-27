@@ -1,6 +1,6 @@
 PYTHON ?= .venv/bin/python3
 
-.PHONY: install run debug clean lint lint-strict
+.PHONY: install run debug clean lint lint-strict build
 
 install:
 	$(PYTHON) -m pip install -r requirements.txt
@@ -24,3 +24,7 @@ lint:
 lint-strict:
 	flake8 .
 	mypy . --strict
+
+build:
+	$(PYTHON) -m build
+	cp dist/mazegen-1.0.0* ./
