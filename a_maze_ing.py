@@ -18,40 +18,6 @@ from mazegen import MazeGenerator
 from solver.pathfinder import solve as solve_maze
 from ui.terminal import TerminalUI
 
-# ---------------------------------------------------------------------------
-# MockGenerator (Developer B stub — used when the real generator is absent)
-# ---------------------------------------------------------------------------
-
-
-class MockGenerator:
-    """Hardcoded 5×5 maze for UI/solver development without the real generator.
-
-    The mock returns a pre-built hex grid so the CLI, solver, and UI
-    can be developed and tested independently of the core algorithm.
-    """
-
-    def __init__(self) -> None:
-        self.width: int = 5
-        self.height: int = 5
-        # A simple 5×5 perfect maze encoded in hex.
-        self._hex_grid: List[List[int]] = [
-            [0x9, 0x3, 0x5, 0x5, 0x7],
-            [0xA, 0x9, 0x6, 0xC, 0x3],
-            [0xA, 0xC, 0x3, 0xD, 0x2],
-            [0xA, 0xD, 0x2, 0xC, 0x2],
-            [0xC, 0x5, 0x6, 0xD, 0x6],
-        ]
-
-    def to_hex_format(self) -> List[List[int]]:
-        """Return the hardcoded hex grid."""
-        return self._hex_grid
-
-    def to_hex_string(self) -> str:
-        """Return the hex grid as a string."""
-        return "\n".join(
-            "".join(f"{v:X}" for v in row) for row in self._hex_grid
-        )
-
 
 # ---------------------------------------------------------------------------
 # Config parsing

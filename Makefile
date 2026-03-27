@@ -1,6 +1,6 @@
 PYTHON ?= .venv/bin/python3
 
-.PHONY: install run lint debug clean build test
+.PHONY: install run debug clean lint lint-strict
 
 install:
 	$(PYTHON) -m pip install -r requirements.txt
@@ -9,20 +9,18 @@ install:
 run:
 	$(PYTHON) a_maze_ing.py config.txt
 
-lint:
-	flake8 --max-line-length 99 src/ solver/ ui/ a_maze_ing.py tests/
-	mypy --ignore-missing-imports src/ a_maze_ing.py solver/ ui/
-
-test:
-	$(PYTHON) -m pytest tests/ -v
-
 debug:
-	$(PYTHON) -c "from mazegen import MazeGenerator; m = MazeGenerator(20, 15, 42); m.debug_render(); print(); m.debug_render_walls()"
+	$(PYTHON) -m pdb a_maze_ing.py config.txt
 
 clean:
 	rm -rf build dist *.egg-info src/*.egg-info __pycache__ src/__pycache__
 	rm -rf src/mazegen/__pycache__ solver/__pycache__ ui/__pycache__ tests/__pycache__
 	rm -rf .mypy_cache .pytest_cache output_maze.txt
 
-build:
-	$(PYTHON) -m build
+lint:
+	flake8 .
+	mypy . --warn-return-any --warn-unused-ignores --ignore-missing-imports --disallow-untyped-defs --check-untyped-defs
+
+lint-strict:
+	flake8 .
+	mypy . --strict

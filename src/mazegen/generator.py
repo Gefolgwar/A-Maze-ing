@@ -12,8 +12,6 @@ from mazegen.utils import (
     SOUTH,
     WEST,
     Coord,
-    debug_render,
-    debug_render_walls,
     neighbors,
 )
 
@@ -499,14 +497,3 @@ class MazeGenerator:
         """Cells outside the chosen shape (rendered blank)."""
         return set(self._outside)
 
-    # ------------------------------------------------------------------
-    # Debug helpers
-    # ------------------------------------------------------------------
-
-    def debug_render(self) -> None:
-        """Print the hex grid to the terminal (Developer A stub)."""
-        debug_render(self.to_hex_format())
-
-    def debug_render_walls(self) -> None:
-        """Print the maze with ASCII box-drawing walls."""
-        debug_render_walls(self.to_hex_format())
