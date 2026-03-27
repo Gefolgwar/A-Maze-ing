@@ -76,10 +76,6 @@ def _on_key(keycode: int, state: object) -> None:  # type: ignore[type-arg]
         state.handle_key(keycode)
 
 
-def _on_mouse(button: int, x: int, y: int, state: object) -> None:  # type: ignore[type-arg]
-    """Handle mouse click events."""
-    if isinstance(state, GraphicalUI):
-        state.handle_mouse(button, x, y)
 
 
 def _on_loop(state: object) -> None:  # type: ignore[type-arg]
@@ -92,6 +88,7 @@ def _on_expose(state: object) -> None:  # type: ignore[type-arg]
     """Expose callback — mark for redraw."""
     if isinstance(state, GraphicalUI):
         state._needs_redraw = True
+        state._needs_menu_redraw = True
 
 
 def _on_destroy(state: object) -> None:  # type: ignore[type-arg]
@@ -183,17 +180,23 @@ class GraphicalUI:
         self._mlx: Optional[object] = None
         self._mlx_ptr: Optional[object] = None
         self._win_ptr: Optional[object] = None
+        # Maze image — covers only the maze area, blitted every frame.
         self._img_ptr: Optional[object] = None
         self._img_data: Optional[memoryview] = None
         self._img_bpp: int = 0
         self._img_sl: int = 0
         self._img_fmt: int = 0
+        # Menu image — covers only the side-panel, blitted on menu changes.
+        self._menu_img_ptr: Optional[object] = None
+        self._menu_img_data: Optional[memoryview] = None
+        self._menu_img_sl: int = 0
         self._maze_w: int = 0
         self._maze_h: int = 0
         self._win_w: int = 0
         self._win_h: int = 0
-        self._menu_w: int = 220
+        self._menu_w: int = 240
         self._needs_redraw: bool = True
+        self._needs_menu_redraw: bool = True
 
     # ── Colour ───────────────────────────────────────────────────────────
 
@@ -251,8 +254,8 @@ class GraphicalUI:
         return bytes([255, r, g, b])  # A8R8G8B8
 
     def _put_pixel(self, x: int, y: int, r: int, g: int, b: int) -> None:
-        """Set a single pixel in the image buffer."""
-        if x < 0 or x >= self._win_w or y < 0 or y >= self._win_h:
+        """Set a single pixel in the maze image buffer."""
+        if x < 0 or x >= self._maze_w or y < 0 or y >= self._win_h:
             return
         bpp: int = self._img_bpp // 8
         off: int = y * self._img_sl + x * bpp
@@ -262,11 +265,16 @@ class GraphicalUI:
     def _fill_rect(
         self, x: int, y: int, w: int, h: int,
         r: int, g: int, b: int,
+        *, img_data: Optional[memoryview] = None,
+        img_w: Optional[int] = None, img_sl: Optional[int] = None,
     ) -> None:
-        """Fill a rectangle in the image buffer."""
+        """Fill a rectangle in an image buffer (defaults to maze image)."""
+        data = img_data if img_data is not None else self._img_data
+        max_w = img_w if img_w is not None else self._maze_w
+        sl = img_sl if img_sl is not None else self._img_sl
         x1: int = max(0, x)
         y1: int = max(0, y)
-        x2: int = min(self._win_w, x + w)
+        x2: int = min(max_w, x + w)
         y2: int = min(self._win_h, y + h)
         if x2 <= x1 or y2 <= y1:
             return
@@ -274,33 +282,41 @@ class GraphicalUI:
         px: bytes = self._pixel_bytes(r, g, b)
         row: bytes = px * (x2 - x1)
         row_len: int = len(row)
-        sl: int = self._img_sl
-        data = self._img_data
         for py in range(y1, y2):
             off: int = py * sl + x1 * bpp
             data[off:off + row_len] = row  # type: ignore[index]
 
     def _draw_hline(
         self, x1: int, x2: int, y: int, r: int, g: int, b: int,
+        *, img_data: Optional[memoryview] = None,
+        img_w: Optional[int] = None, img_sl: Optional[int] = None,
     ) -> None:
-        """Draw a horizontal line in the image buffer."""
+        """Draw a horizontal line in an image buffer (defaults to maze image)."""
+        data = img_data if img_data is not None else self._img_data
+        max_w = img_w if img_w is not None else self._maze_w
+        sl = img_sl if img_sl is not None else self._img_sl
         if y < 0 or y >= self._win_h:
             return
         xa: int = max(0, min(x1, x2))
-        xb: int = min(self._win_w - 1, max(x1, x2))
+        xb: int = min(max_w - 1, max(x1, x2))
         if xa > xb:
             return
         bpp: int = self._img_bpp // 8
         px: bytes = self._pixel_bytes(r, g, b)
         row: bytes = px * (xb - xa + 1)
-        off: int = y * self._img_sl + xa * bpp
-        self._img_data[off:off + len(row)] = row  # type: ignore[index]
+        off: int = y * sl + xa * bpp
+        data[off:off + len(row)] = row  # type: ignore[index]
 
     def _draw_vline(
         self, x: int, y1: int, y2: int, r: int, g: int, b: int,
+        *, img_data: Optional[memoryview] = None,
+        img_w: Optional[int] = None, img_sl: Optional[int] = None,
     ) -> None:
-        """Draw a vertical line in the image buffer."""
-        if x < 0 or x >= self._win_w:
+        """Draw a vertical line in an image buffer (defaults to maze image)."""
+        data = img_data if img_data is not None else self._img_data
+        max_w = img_w if img_w is not None else self._maze_w
+        sl_val = img_sl if img_sl is not None else self._img_sl
+        if x < 0 or x >= max_w:
             return
         ya: int = max(0, min(y1, y2))
         yb: int = min(self._win_h - 1, max(y1, y2))
@@ -308,10 +324,8 @@ class GraphicalUI:
             return
         bpp: int = self._img_bpp // 8
         px: bytes = self._pixel_bytes(r, g, b)
-        sl: int = self._img_sl
-        data = self._img_data
         for py in range(ya, yb + 1):
-            off: int = py * sl + x * bpp
+            off: int = py * sl_val + x * bpp
             data[off:off + 4] = px  # type: ignore[index]
 
     # ── Main loop ─────────────────────────────────────────────────────────
@@ -334,9 +348,9 @@ class GraphicalUI:
         if self._win_ptr is None:
             raise RuntimeError("mlx_new_window() failed")
 
-        # Image buffer covering the full window
+        # Maze image — covers only the maze area
         self._img_ptr = mlx.mlx_new_image(
-            self._mlx_ptr, self._win_w, self._win_h,
+            self._mlx_ptr, self._maze_w, self._win_h,
         )
         img_info = mlx.mlx_get_data_addr(self._img_ptr)
         self._img_data = img_info[0]
@@ -344,20 +358,29 @@ class GraphicalUI:
         self._img_sl = img_info[2]
         self._img_fmt = img_info[3]
 
+        # Menu image — covers only the side-panel; blitted independently
+        self._menu_img_ptr = mlx.mlx_new_image(
+            self._mlx_ptr, self._menu_w, self._win_h,
+        )
+        menu_info = mlx.mlx_get_data_addr(self._menu_img_ptr)
+        self._menu_img_data = menu_info[0]
+        self._menu_img_sl = menu_info[2]
+
         # Register hooks
         # Key press (X11 event 2) for responsiveness
         mlx.mlx_hook(self._win_ptr, 2, 1, _on_key, self)
-        mlx.mlx_mouse_hook(self._win_ptr, _on_mouse, self)
         mlx.mlx_expose_hook(self._win_ptr, _on_expose, self)
         mlx.mlx_loop_hook(self._mlx_ptr, _on_loop, self)
         # Window close (X11 DestroyNotify = event 17)
         mlx.mlx_hook(self._win_ptr, 33, 0, _on_destroy, self)
 
         self._needs_redraw = True
+        self._needs_menu_redraw = True
         mlx.mlx_loop(self._mlx_ptr)
 
         # Cleanup after loop exits
         mlx.mlx_destroy_image(self._mlx_ptr, self._img_ptr)
+        mlx.mlx_destroy_image(self._mlx_ptr, self._menu_img_ptr)
         mlx.mlx_destroy_window(self._mlx_ptr, self._win_ptr)
         mlx.mlx_release(self._mlx_ptr)
 
@@ -370,15 +393,19 @@ class GraphicalUI:
             if keycode == _KEY_UP:
                 self._handle_player_move(NORTH)
                 self._needs_redraw = True
+                self._needs_menu_redraw = True
             elif keycode == _KEY_RIGHT:
                 self._handle_player_move(EAST)
                 self._needs_redraw = True
+                self._needs_menu_redraw = True
             elif keycode == _KEY_DOWN:
                 self._handle_player_move(SOUTH)
                 self._needs_redraw = True
+                self._needs_menu_redraw = True
             elif keycode == _KEY_LEFT:
                 self._handle_player_move(WEST)
                 self._needs_redraw = True
+                self._needs_menu_redraw = True
 
         # Global keys
         if keycode in (_KEY_Q, _KEY_ESC):
@@ -386,6 +413,7 @@ class GraphicalUI:
         elif keycode == _KEY_G:
             self._toggle_game_mode()
             self._needs_redraw = True
+            self._needs_menu_redraw = True
         elif not self._game_mode:
             if keycode in (_KEY_1, _KEY_R):
                 self._trigger_anim(self.anim_regen_cb)
@@ -396,28 +424,29 @@ class GraphicalUI:
             elif keycode in (_KEY_5, _KEY_C):
                 self._cycle_colors()
                 self._needs_redraw = True
+                self._needs_menu_redraw = True
             elif keycode in (_KEY_EQUAL, _KEY_PLUS_KP):
                 self.anim_speed = min(_MAX_SPEED, self.anim_speed * 2)
                 self._needs_redraw = True
+                self._needs_menu_redraw = True
             elif keycode in (_KEY_MINUS, _KEY_MINUS_KP):
                 self.anim_speed = max(_MIN_SPEED, self.anim_speed // 2)
                 self._needs_redraw = True
+                self._needs_menu_redraw = True
 
         # Key 4 / P works in both modes
         if keycode in (_KEY_4, _KEY_P) and not self._is_animating:
             self.show_solution = not self.show_solution
             self._needs_redraw = True
+            self._needs_menu_redraw = True
 
-    def handle_mouse(self, button: int, x: int, y: int) -> None:
-        """Handle a mouse click event."""
-        if x > self._maze_w:
-            self._handle_menu_click(y)
 
     def handle_frame(self) -> None:
         """Called on each idle loop iteration."""
         if self._is_animating and self._anim_iter is not None:
             if self._advance_anim():
                 self._finish_anim()
+                self._needs_menu_redraw = True
             self._needs_redraw = True
 
         if self._needs_redraw:
@@ -456,6 +485,7 @@ class GraphicalUI:
         # Reset play mode when re-generating
         self._game_mode = False
         self._game_won = False
+        self._needs_menu_redraw = True
 
     def _advance_anim(self) -> bool:
         assert self._anim_iter is not None
@@ -478,52 +508,45 @@ class GraphicalUI:
             )
             self.solution_cells = set(cells or [])
 
-    # ── Menu ─────────────────────────────────────────────────────────────
-
-    def _handle_menu_click(self, y: int) -> None:
-        actions = [
-            lambda: self._trigger_anim(self.anim_regen_cb),
-            lambda: self._trigger_anim(self.anim_algo_cb),
-            lambda: self._trigger_anim(self.anim_shape_cb),
-            lambda: setattr(self, "show_solution", not self.show_solution),
-            self._cycle_colors,
-            self._toggle_game_mode,
-        ]
-        start_y, item_h = 80, 34
-        for i, action in enumerate(actions):
-            if start_y + i * item_h <= y < start_y + (i + 1) * item_h:
-                # In game mode only path-toggle (i=3) and game-toggle (i=5)
-                if self._game_mode and i not in (3, 5):
-                    return
-                if i == 3 and self._is_animating:
-                    return
-                action()
-                self._needs_redraw = True
-                break
 
     # ── Full redraw ──────────────────────────────────────────────────────
 
     def _redraw(self) -> None:
-        """Redraw the entire window: maze image + menu text."""
+        """Redraw the window.
+
+        The maze image is blitted every frame.  The menu image is blitted
+        only when its content changes, keeping it completely static during
+        maze-generation animation and eliminating flickering.
+        """
         mlx = self._mlx
-        # Fill maze area with background
+        # ── Maze image (blitted every frame) ──────────────────────────
         self._fill_rect(0, 0, self._maze_w, self._win_h, *self.bg_color)
-        # Fill menu area
-        self._fill_rect(self._maze_w, 0, self._menu_w, self._win_h, *_MENU_BG)
-        # Separator line
-        self._draw_vline(self._maze_w, 0, self._win_h - 1, 100, 100, 100)
-        # Separator under speed
-        self._draw_hline(
-            self._maze_w + 4, self._maze_w + 216, 56, 60, 60, 60,
-        )
-        # Draw maze cells
         self._draw_maze()
-        # Blit image to window
         mlx.mlx_put_image_to_window(  # type: ignore[union-attr]
             self._mlx_ptr, self._win_ptr, self._img_ptr, 0, 0,
         )
-        # Draw text on top of the image
-        self._draw_menu_text()
+        # ── Menu image (blitted only on change) ──────────────────────
+        if self._needs_menu_redraw:
+            md = self._menu_img_data
+            mw = self._menu_w
+            msl = self._menu_img_sl
+            # Fill menu background
+            self._fill_rect(0, 0, mw, self._win_h, *_MENU_BG,
+                            img_data=md, img_w=mw, img_sl=msl)
+            # Separator line (left edge of menu)
+            self._draw_vline(0, 0, self._win_h - 1, 100, 100, 100,
+                             img_data=md, img_w=mw, img_sl=msl)
+            # Separator under speed row
+            self._draw_hline(4, 216, 56, 60, 60, 60,
+                             img_data=md, img_w=mw, img_sl=msl)
+            # Blit menu image at the right side of the window
+            mlx.mlx_put_image_to_window(  # type: ignore[union-attr]
+                self._mlx_ptr, self._win_ptr, self._menu_img_ptr,
+                self._maze_w, 0,
+            )
+            # Draw text on top of the menu image
+            self._draw_menu_text()
+            self._needs_menu_redraw = False
 
     def _draw_menu_text(self) -> None:
         """Draw the side-panel text using mlx_string_put."""
@@ -548,16 +571,16 @@ class GraphicalUI:
         )
 
         # Menu items
-        algo_short: str = self.current_algo[:13]
-        shape_short: str = self.current_shape[:10]
+        algo_short: str = self.current_algo[:20]
+        shape_short: str = self.current_shape[:15]
         items = [
-            "1. Re-generate",
-            f"2. Algo: {algo_short}",
-            f"3. Shape: {shape_short}",
-            "4. Show/Hide path",
-            "5. Rotate colors",
-            f"G. Game: {'ON' if self._game_mode else 'OFF'}",
-            "Q/Esc. Quit",
+            "1/R  Re-generate",
+            f"2    {algo_short}",
+            f"3    {shape_short}",
+            "4/P  Show/Hide path",
+            "5/C  Rotate colors",
+            f"G    Game: {'ON' if self._game_mode else 'OFF'}",
+            "Q    Quit",
         ]
         start_y, item_h = 80, 34
         for i, label in enumerate(items):
