@@ -88,11 +88,11 @@ class TestHexEncoding:
         gen: MazeGenerator = MazeGenerator(10, 10, seed=42)
         g: List[List[int]] = gen.to_hex_format()
         for c in range(10):
-            assert (g[0][c] & 1) != 0, f"Top border open at col {c}"       # North
-            assert (g[9][c] & 4) != 0, f"Bottom border open at col {c}"    # South
+            assert (g[0][c] & 1) != 0, f"Top border open at col {c}"
+            assert (g[9][c] & 4) != 0, f"Bottom border open at col {c}"
         for r in range(10):
-            assert (g[r][0] & 8) != 0, f"Left border open at row {r}"      # West
-            assert (g[r][9] & 2) != 0, f"Right border open at row {r}"     # East
+            assert (g[r][0] & 8) != 0, f"Left border open at row {r}"
+            assert (g[r][9] & 2) != 0, f"Right border open at row {r}"
 
 
 class TestPattern42:
@@ -133,7 +133,7 @@ class TestPerfectMaze:
     """Tests ensuring a perfect maze has exactly one path."""
 
     def test_single_path_bfs(self) -> None:
-        """BFS from any cell should reach every non-blocked cell exactly once."""
+        """BFS from any cell should reach non-blocked cell exactly once."""
         from collections import deque
 
         gen: MazeGenerator = MazeGenerator(12, 10, seed=7)

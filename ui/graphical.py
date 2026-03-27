@@ -1,9 +1,10 @@
-"""Graphical maze rendering with MiniLibX (MLX) — animated generation + play mode."""
+"""Graphical maze rendering with MiniLibX (MLX) —
+animated generation + play mode."""
 
-from typing import Callable, Dict, Iterator, List, Optional, Set, Tuple
+from typing import Callable, Dict, Iterator, List, Optional, Set, Tuple, Any
 
 try:
-    from mlx.mlx import Mlx
+    from mlx.mlx import Mlx  # type: ignore
     _HAS_MLX: bool = True
 except ImportError:
     _HAS_MLX = False
@@ -29,9 +30,12 @@ def _rgb_to_color(r: int, g: int, b: int) -> int:
 
 
 _COLOR_PRESETS: List[Dict[str, str]] = [
-    {"WallColor": "#FFFFFF", "SolutionColor": "#FF0000", "PathColor": "#00FF00"},
-    {"WallColor": "#00AAFF", "SolutionColor": "#FFAA00", "PathColor": "#AAFFAA"},
-    {"WallColor": "#FF00FF", "SolutionColor": "#00FFFF", "PathColor": "#FFFF00"},
+    {"WallColor": "#FFFFFF", "SolutionColor": "#FF0000",
+     "PathColor": "#00FF00"},
+    {"WallColor": "#00AAFF", "SolutionColor": "#FFAA00",
+     "PathColor": "#AAFFAA"},
+    {"WallColor": "#FF00FF", "SolutionColor": "#00FFFF",
+     "PathColor": "#FFFF00"},
 ]
 
 _BLOCKED_COLOR: Tuple[int, int, int] = (80, 80, 80)
@@ -70,28 +74,26 @@ _KEY_RIGHT: int = 65363
 
 # ── Module-level callbacks for MLX (CFUNCTYPE-compatible) ─────────────────
 
-def _on_key(keycode: int, state: object) -> None:  # type: ignore[type-arg]
+def _on_key(keycode: int, state: object) -> None:
     """Handle key press events."""
     if isinstance(state, GraphicalUI):
         state.handle_key(keycode)
 
 
-
-
-def _on_loop(state: object) -> None:  # type: ignore[type-arg]
+def _on_loop(state: object) -> None:
     """Idle frame callback — advance animation and redraw."""
     if isinstance(state, GraphicalUI):
         state.handle_frame()
 
 
-def _on_expose(state: object) -> None:  # type: ignore[type-arg]
+def _on_expose(state: object) -> None:
     """Expose callback — mark for redraw."""
     if isinstance(state, GraphicalUI):
         state._needs_redraw = True
         state._needs_menu_redraw = True
 
 
-def _on_destroy(state: object) -> None:  # type: ignore[type-arg]
+def _on_destroy(state: object) -> None:
     """Window close (DestroyNotify) callback."""
     if isinstance(state, GraphicalUI):
         state._quit()
@@ -116,16 +118,16 @@ class GraphicalUI:
         exit_cell: Optional[Tuple[int, int]] = None,
         blocked_cells: Optional[Set[Tuple[int, int]]] = None,
         outside_cells: Optional[Set[Tuple[int, int]]] = None,
-        anim_regen_cb: Optional[  # type: ignore[type-arg]
-            Callable[[], Optional[tuple]]
+        anim_regen_cb: Optional[
+            Callable[[], Optional[Tuple[Any, ...]]]
         ] = None,
-        anim_algo_cb: Optional[  # type: ignore[type-arg]
-            Callable[[], Optional[tuple]]
+        anim_algo_cb: Optional[
+            Callable[[], Optional[Tuple[Any, ...]]]
         ] = None,
-        anim_shape_cb: Optional[  # type: ignore[type-arg]
-            Callable[[], Optional[tuple]]
+        anim_shape_cb: Optional[
+            Callable[[], Optional[Tuple[Any, ...]]]
         ] = None,
-        solve_cb: Optional[  # type: ignore[type-arg]
+        solve_cb: Optional[
             Callable[..., List[Tuple[int, int]]]
         ] = None,
         current_algo: str = "Recursive Backtracker",
@@ -177,9 +179,9 @@ class GraphicalUI:
         self._apply_preset()
 
         # MLX state (initialised in run())
-        self._mlx: Optional[object] = None
-        self._mlx_ptr: Optional[object] = None
-        self._win_ptr: Optional[object] = None
+        self._mlx: Optional[Mlx] = None
+        self._mlx_ptr: Optional[Mlx] = None
+        self._win_ptr: Optional[Mlx] = None
         # Maze image — covers only the maze area, blitted every frame.
         self._img_ptr: Optional[object] = None
         self._img_data: Optional[memoryview] = None
@@ -260,7 +262,9 @@ class GraphicalUI:
         bpp: int = self._img_bpp // 8
         off: int = y * self._img_sl + x * bpp
         px: bytes = self._pixel_bytes(r, g, b)
-        self._img_data[off:off + 4] = px  # type: ignore[index]
+        if self._img_data is None:
+            return
+        self._img_data[off:off + 4] = px
 
     def _fill_rect(
         self, x: int, y: int, w: int, h: int,
@@ -269,7 +273,12 @@ class GraphicalUI:
         img_w: Optional[int] = None, img_sl: Optional[int] = None,
     ) -> None:
         """Fill a rectangle in an image buffer (defaults to maze image)."""
-        data = img_data if img_data is not None else self._img_data
+        if img_data is not None:
+            data = img_data
+        else:
+            if self._img_data is None:
+                return
+            data = self._img_data
         max_w = img_w if img_w is not None else self._maze_w
         sl = img_sl if img_sl is not None else self._img_sl
         x1: int = max(0, x)
@@ -284,15 +293,21 @@ class GraphicalUI:
         row_len: int = len(row)
         for py in range(y1, y2):
             off: int = py * sl + x1 * bpp
-            data[off:off + row_len] = row  # type: ignore[index]
+            data[off:off + row_len] = row
 
     def _draw_hline(
         self, x1: int, x2: int, y: int, r: int, g: int, b: int,
         *, img_data: Optional[memoryview] = None,
         img_w: Optional[int] = None, img_sl: Optional[int] = None,
     ) -> None:
-        """Draw a horizontal line in an image buffer (defaults to maze image)."""
-        data = img_data if img_data is not None else self._img_data
+        """Draw a horizontal line in an image buffer
+        (defaults to maze image)."""
+        if img_data is not None:
+            data = img_data
+        else:
+            if self._img_data is None:
+                return
+            data = self._img_data
         max_w = img_w if img_w is not None else self._maze_w
         sl = img_sl if img_sl is not None else self._img_sl
         if y < 0 or y >= self._win_h:
@@ -305,7 +320,7 @@ class GraphicalUI:
         px: bytes = self._pixel_bytes(r, g, b)
         row: bytes = px * (xb - xa + 1)
         off: int = y * sl + xa * bpp
-        data[off:off + len(row)] = row  # type: ignore[index]
+        data[off:off + len(row)] = row
 
     def _draw_vline(
         self, x: int, y1: int, y2: int, r: int, g: int, b: int,
@@ -313,7 +328,12 @@ class GraphicalUI:
         img_w: Optional[int] = None, img_sl: Optional[int] = None,
     ) -> None:
         """Draw a vertical line in an image buffer (defaults to maze image)."""
-        data = img_data if img_data is not None else self._img_data
+        if img_data is not None:
+            data = img_data
+        else:
+            if self._img_data is None:
+                return
+            data = self._img_data
         max_w = img_w if img_w is not None else self._maze_w
         sl_val = img_sl if img_sl is not None else self._img_sl
         if x < 0 or x >= max_w:
@@ -326,7 +346,7 @@ class GraphicalUI:
         px: bytes = self._pixel_bytes(r, g, b)
         for py in range(ya, yb + 1):
             off: int = py * sl_val + x * bpp
-            data[off:off + 4] = px  # type: ignore[index]
+            data[off:off + 4] = px
 
     # ── Main loop ─────────────────────────────────────────────────────────
 
@@ -440,7 +460,6 @@ class GraphicalUI:
             self._needs_redraw = True
             self._needs_menu_redraw = True
 
-
     def handle_frame(self) -> None:
         """Called on each idle loop iteration."""
         if self._is_animating and self._anim_iter is not None:
@@ -456,14 +475,14 @@ class GraphicalUI:
     def _quit(self) -> None:
         """Exit the MLX loop."""
         if self._mlx is not None and self._mlx_ptr is not None:
-            self._mlx.mlx_loop_exit(self._mlx_ptr)  # type: ignore[union-attr]
+            self._mlx.mlx_loop_exit(self._mlx_ptr)
 
     # ── Animation control ─────────────────────────────────────────────────
 
     def _trigger_anim(self, callback: Optional[object]) -> None:
         if not callable(callback):
             return
-        result = callback()  # type: ignore[operator]
+        result = callback()
         if result is None:
             return
         (
@@ -503,11 +522,10 @@ class GraphicalUI:
         self.exit_cell = self._anim_exit
         self._player_pos = self.entry
         if callable(self.solve_cb) and self.entry and self.exit_cell:
-            cells = self.solve_cb(  # type: ignore[operator]
+            cells = self.solve_cb(
                 self.hex_grid, self.entry, self.exit_cell
             )
             self.solution_cells = set(cells or [])
-
 
     # ── Full redraw ──────────────────────────────────────────────────────
 
@@ -518,11 +536,13 @@ class GraphicalUI:
         only when its content changes, keeping it completely static during
         maze-generation animation and eliminating flickering.
         """
+        if self._mlx is None or self._mlx_ptr is None or self._win_ptr is None:
+            return
         mlx = self._mlx
         # ── Maze image (blitted every frame) ──────────────────────────
         self._fill_rect(0, 0, self._maze_w, self._win_h, *self.bg_color)
         self._draw_maze()
-        mlx.mlx_put_image_to_window(  # type: ignore[union-attr]
+        mlx.mlx_put_image_to_window(
             self._mlx_ptr, self._win_ptr, self._img_ptr, 0, 0,
         )
         # ── Menu image (blitted only on change) ──────────────────────
@@ -540,7 +560,7 @@ class GraphicalUI:
             self._draw_hline(4, 216, 56, 60, 60, 60,
                              img_data=md, img_w=mw, img_sl=msl)
             # Blit menu image at the right side of the window
-            mlx.mlx_put_image_to_window(  # type: ignore[union-attr]
+            mlx.mlx_put_image_to_window(
                 self._mlx_ptr, self._win_ptr, self._menu_img_ptr,
                 self._maze_w, 0,
             )
@@ -550,6 +570,8 @@ class GraphicalUI:
 
     def _draw_menu_text(self) -> None:
         """Draw the side-panel text using mlx_string_put."""
+        if self._mlx is None or self._mlx_ptr is None or self._win_ptr is None:
+            return
         m = self._mlx
         mp = self._mlx_ptr
         wp = self._win_ptr
@@ -562,11 +584,11 @@ class GraphicalUI:
             title, tc = "BUILDING...", _rgb_to_color(*_ANIM_COLOR)
         else:
             title, tc = "A-Maze-ing", _rgb_to_color(*_MENU_HL)
-        m.mlx_string_put(mp, wp, x, 16, tc, title)  # type: ignore[union-attr]
+        m.mlx_string_put(mp, wp, x, 16, tc, title)
 
         # Speed indicator
         sc = _rgb_to_color(*(_ANIM_COLOR if self._is_animating else _MENU_FG))
-        m.mlx_string_put(  # type: ignore[union-attr]
+        m.mlx_string_put(
             mp, wp, x, 40, sc, f"+/- Speed: {self.anim_speed} step/fr",
         )
 
@@ -590,7 +612,7 @@ class GraphicalUI:
                 col = _rgb_to_color(*_ANIM_COLOR)
             else:
                 col = _rgb_to_color(*_MENU_FG)
-            m.mlx_string_put(  # type: ignore[union-attr]
+            m.mlx_string_put(
                 mp, wp, x, start_y + i * item_h + 14, col, label,
             )
 
@@ -602,20 +624,20 @@ class GraphicalUI:
             steps_c = _rgb_to_color(
                 *(_WIN_COLOR if self._game_won else _GAME_COLOR)
             )
-            m.mlx_string_put(  # type: ignore[union-attr]
+            m.mlx_string_put(
                 mp, wp, x, sep_y + 18, steps_c, steps_label,
             )
             if self._game_won:
-                m.mlx_string_put(  # type: ignore[union-attr]
+                m.mlx_string_put(
                     mp, wp, x, sep_y + 38,
                     _rgb_to_color(*_WIN_COLOR), "*** YOU WIN! ***",
                 )
-                m.mlx_string_put(  # type: ignore[union-attr]
+                m.mlx_string_put(
                     mp, wp, x, sep_y + 58,
                     _rgb_to_color(*_MENU_FG), "Press G to play again",
                 )
             else:
-                m.mlx_string_put(  # type: ignore[union-attr]
+                m.mlx_string_put(
                     mp, wp, x, sep_y + 38,
                     _rgb_to_color(*_MENU_FG), "Arrows: navigate",
                 )

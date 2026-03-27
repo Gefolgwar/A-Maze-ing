@@ -1,6 +1,6 @@
 """Terminal-based ASCII maze rendering with colorama support."""
 
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple, Any
 
 try:
     from colorama import Fore, Style, init as colorama_init
@@ -31,9 +31,12 @@ SOUTH: int = 2
 WEST: int = 3
 
 _COLOR_SCHEMES: List[Dict[str, str]] = [
-    {"WallColor": "#FFFFFF", "PathColor": "#00FF00", "SolutionColor": "#FF0000"},
-    {"WallColor": "#0000FF", "PathColor": "#FFFF00", "SolutionColor": "#FF00FF"},
-    {"WallColor": "#00FFFF", "PathColor": "#FFFFFF", "SolutionColor": "#00FF00"},
+    {"WallColor": "#FFFFFF", "PathColor": "#00FF00",
+     "SolutionColor": "#FF0000"},
+    {"WallColor": "#0000FF", "PathColor": "#FFFF00",
+     "SolutionColor": "#FF00FF"},
+    {"WallColor": "#00FFFF", "PathColor": "#FFFFFF",
+     "SolutionColor": "#00FF00"},
 ]
 
 
@@ -110,7 +113,10 @@ class TerminalUI:
                     has_north: bool = bool(cell & (1 << NORTH))
                     top += wc + "+" + ("--" if has_north else "  ") + _RESET
             last: int = self.width - 1
-            top += " " if (r, last) in self.outside_cells else wc + "+" + _RESET
+            if (r, last) in self.outside_cells:
+                top += " "
+            else:
+                top += wc + "+" + _RESET
             lines.append(top)
 
             # ── Cell content row ──────────────────────────────────────
@@ -171,7 +177,7 @@ class TerminalUI:
         print("5. Rotate maze colors")
         print("6. Quit")
 
-    def _set_grid(self, res: tuple) -> None:
+    def _set_grid(self, res: Tuple[Any, ...]) -> None:
         """Unpack (grid, sol, blocked, outside[, label...]) into self."""
         self.hex_grid, sol, self.blocked_cells, self.outside_cells = res[:4]
         self.height = len(self.hex_grid)
@@ -193,25 +199,28 @@ class TerminalUI:
 
             if choice == "1":
                 if callable(self.regenerate_callback):
-                    res = self.regenerate_callback()  # type: ignore[operator]
+                    res = self.regenerate_callback()
                     if res is not None:
                         self._set_grid(res)
             elif choice == "2":
                 if callable(self.change_algo_callback):
-                    res = self.change_algo_callback()  # type: ignore[operator]
+                    res = self.change_algo_callback()
                     if res is not None:
                         self._set_grid(res)
                         self.current_algo = res[4]
             elif choice == "3":
                 if callable(self.change_shape_callback):
-                    res = self.change_shape_callback()  # type: ignore[operator]
+                    res = self.change_shape_callback()
                     if res is not None:
                         self._set_grid(res)
                         self.current_shape = res[6]
             elif choice == "4":
                 self.show_solution = not self.show_solution
             elif choice == "5":
-                self._scheme_index = (self._scheme_index + 1) % len(_COLOR_SCHEMES)
+                self._scheme_index = (
+                    (self._scheme_index + 1)
+                    % len(_COLOR_SCHEMES)
+                )
                 self._apply_scheme()
             elif choice == "6":
                 break

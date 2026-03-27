@@ -77,7 +77,11 @@ def solve(
                 continue
             nr: int = r + dr
             nc: int = c + dc
-            if 0 <= nr < height and 0 <= nc < width and (nr, nc) not in visited:
+            if (
+                0 <= nr < height
+                and 0 <= nc < width
+                and (nr, nc) not in visited
+            ):
                 visited.add((nr, nc))
                 queue.append((nr, nc, path + [DIRECTION_NAMES[direction]]))
 

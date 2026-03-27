@@ -114,7 +114,7 @@ class TestOutputFile:
             [0xC, 0x5, 0x6],
         ]
         p = os.path.join(str(tmp_path), "output.txt")
-        write_output(p, grid, entry=(0, 0), exit_cell=(2, 2), solution="E E S S")
+        write_output(p, grid, entry=(0, 0), exit_cell=(2, 2), solution="EESS")
 
         with open(p, "r") as fh:
             lines: List[str] = fh.readlines()
