@@ -334,6 +334,15 @@ def main() -> None:
         print(f"Error: HEIGHT must be an integer, got {config['HEIGHT']!r}",
               file=sys.stderr)
         sys.exit(1)
+    # Check WIDTH HEIGHT too small
+    MIN_SIZE, MAX_SIZE = 5, 100
+    if not (MIN_SIZE <= width <= MAX_SIZE) or not (MIN_SIZE <= height <= MAX_SIZE):
+        print(
+            f"Error: Maze dimensions must be between {MIN_SIZE} and {MAX_SIZE}.\n"
+            f"  Got: WIDTH={width}, HEIGHT={height}",
+            file=sys.stderr
+        )
+        sys.exit(1)
 
     _perfect_raw: str = config["PERFECT"].strip().lower()
     if _perfect_raw not in ("true", "1", "yes", "false", "0", "no"):
@@ -367,6 +376,16 @@ def main() -> None:
     except ValueError as exc:
         print(f"Error: invalid EXIT coordinate: {exc}", file=sys.stderr)
         sys.exit(1)
+	
+	# Check Enter <> Exit
+    if entry == exit_cell:
+        entry = (0, 0)
+        exit_cell = (height - 1, width - 1)
+        print(
+            f"Warning: ENTRY and EXIT were identical. Auto-corrected to:\n"
+            f"  ENTRY -> (0,0), EXIT -> ({width-1},{height-1})",
+            file=sys.stderr
+        )
 
     # Validate that entry/exit are inside the maze for the chosen shape.
     entry = _validate_coord("ENTRY", entry, width, height, initial_shape)
