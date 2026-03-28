@@ -1,122 +1,171 @@
-<<<<<<< HEAD
-# A-Maze-ing
-=======
-# *A-Maze-Ing*
+*This project has been created as part of the 42 curriculum by <psviatus>, <ndabija>.*
 
-> A Python maze generation, solving, and visualization project.
+# A-Maze-ing
 
 ## Description
 
-**A-Maze-Ing** generates perfect or imperfect mazes using a Recursive Backtracker algorithm, embeds the iconic **"42"** pattern as blocked cells, solves the maze with BFS, and outputs the result in a hex-encoded format. The project ships with both a terminal (ASCII) and a graphical (pygame) user interface.
+A-Maze-ing is a Python-based system that generates, solves, and visualizes mazes from a configuration file. The program ensures structural validity, supports perfect maze generation (unique path between entry and exit), computes the shortest path, and exports the result in a strict hexadecimal format. The architecture is modular, separating generation, solving, visualization, and orchestration.
 
-## Quick Start
+---
+
+## Architecture
+
+```mermaid
+flowchart TD
+    A[config.txt] --> B[a_maze_ing.py]
+    B --> C[mazegen package]
+    C --> D[maze data]
+    D --> E[solver]
+    D --> F[ui]
+    E --> G[path]
+    G --> H[output file]
+    D --> H
+```
+
+The system is organized into independent components. The `mazegen` module handles generation, the solver computes paths, the UI renders the maze, and the main script coordinates all interactions.
+
+---
+
+## Instructions
+before install activate virtual envirement 
+```bash
+python3 -m vemv .venv
+source .venv/bin/activate
+```
+Need to install MLX lib separately.
+### Run
 
 ```bash
-# 1. Create a virtual environment
-python -m venv venv
-source venv/bin/activate   # Linux/macOS
-# venv\Scripts\activate    # Windows
-
-# 2. Install
-make install
-
-# 3. Run
-make run
+python3 a_maze_ing.py config.txt
 ```
 
-## Project Structure
+### Makefile
 
-| Path | Owner | Description |
-|------|-------|-------------|
-| `src/mazegen/` | Dev A | Core generation library (packaged as `.whl`) |
-| `solver/` | Dev B | BFS pathfinder |
-| `ui/` | Dev B | Terminal (ASCII) and graphical (pygame) renderers |
-| `a_maze_ing.py` | Dev B | CLI entry point |
-| `config.txt` | Dev B | Runtime configuration (`KEY=VALUE`) |
-| `settings.ini` | Dev B | UI colour/theme settings |
-| `tests/` | Joint | Unit tests for generator logic and I/O |
 
-## Configuration
-
-### `config.txt` (required)
-
+```bash
+make install - Install project dependencies using pip, uv, pipx, or any other package.
+manager of your choice.
+make run -  Execute the main script of your project
+make debug - Run the main script in debug mode using Python’s built-in debugger
+make clean - Remove temporary files or caches.
+make lint - Execute the commands flake8 and mypy
+make lint-strict - Execute the commands flake8 and mypy strict
 ```
+
+---
+
+## Configuration File (Complete Structure)
+
+The configuration file follows a strict `KEY=VALUE` format, where each line defines one parameter of the maze. Commented lines starting with `#` are ignored. The required keys are `WIDTH`, `HEIGHT`, `ENTRY`, `EXIT`, `OUTPUT_FILE`, and `PERFECT`. Coordinates are expressed as tuples (`x,y`), dimensions must be positive integers, and the `PERFECT` flag must be a boolean. The program validates all inputs and handles invalid configurations gracefully without crashing.
+
+```ini
 WIDTH=20
 HEIGHT=15
-SEED=42
-PERFECT=True
 ENTRY=0,0
 EXIT=19,14
 OUTPUT_FILE=output_maze.txt
+PERFECT=True
 ```
 
-### `settings.ini` (optional)
+---
 
-```ini
-[UI]
-WallColor=#FFFFFF
-PathColor=#00FF00
-SolutionColor=#FF0000
-BackgroundColor=#000000
-DisplayMode=terminal
-CellSize=20
-```
+## Maze Generation Algorithm
 
-Set `DisplayMode=graphical` to launch the pygame window.
+The project implements two maze generation algorithms: the Recursive Backtracker (DFS) and Prim’s Algorithm. The Recursive Backtracker explores the maze depth-first and produces long, corridor-like structures, while Prim’s Algorithm builds the maze by expanding a randomized frontier, resulting in more evenly distributed paths. The algorithm can be selected dynamically during execution.
+
+---
+
+## Why These Algorithms
+
+These algorithms were chosen to illustrate different approaches to maze generation and to provide flexibility in the resulting structures. DFS offers simplicity and performance, while Prim’s Algorithm produces more balanced mazes. Supporting both allows comparison and demonstrates a deeper understanding of algorithmic design.
+
+---
+
+## Solver
+
+The shortest path between entry and exit is computed in `solver/pathfinder.py`. The solver guarantees a valid shortest path and encodes it using the directions `N`, `E`, `S`, and `W`, ensuring consistency with the generated maze structure.
+
+---
 
 ## Output Format
 
-The output file contains:
+The output file contains the hexadecimal representation of the maze, followed by the entry and exit coordinates, and the computed shortest path. Each cell is encoded using bitwise wall representation, ensuring coherence between neighboring cells.
 
-1. **Hex rows** — one character per cell (0–F), encoding open directions as bits: N=0, E=1, S=2, W=3.
-2. An **empty line**.
-3. **Entry** and **Exit** coordinates.
-4. The **Solution** path as space-separated directions (`N E S W`).
+Example:
 
-## Hex Encoding
+```
+<maze grid>
 
-Each cell is a 4-bit value:
+1,1
+19,14
+NNEESSWW...
+```
 
-| Bit | Direction | Value |
-|-----|-----------|-------|
-| 0   | North     | 1     |
-| 1   | East      | 2     |
-| 2   | South     | 4     |
-| 3   | West      | 8     |
+---
 
-A set bit means the wall is **closed** (present). For example, `0x3` = `0011` = North and East walls closed, South and West open. `0xA` = `1010` = East and West walls closed.
+## Reusable Code
 
-## Makefile Targets
+The maze generation logic is fully encapsulated in the `mazegen` package, which is independent from the solver and user interface. This module can be packaged as a `.whl` file and reused in other projects. It exposes a simple interface for generating mazes with configurable parameters such as size, seed, and algorithm, making it suitable for integration in different environments.
 
-| Target | Action |
-|--------|--------|
-| `make install` | Install dependencies and package in editable mode |
-| `make run` | Run `a_maze_ing.py config.txt` |
-| `make lint` | Run flake8 + mypy |
-| `make test` | Run pytest |
-| `make debug` | Quick generator debug render in terminal |
-| `make clean` | Remove build/cache artifacts |
-| `make build` | Build `.whl` package via `python -m build` |
+```python
+from mazegen import MazeGenerator
 
-## Team Roles
+gen = MazeGenerator(width=10, height=10, seed=42)
+maze = gen.generate()
+```
 
-- **Developer A (Algorithm Engineer):** Core `mazegen` package — generation algorithm, hex encoding, "42" pattern, 3×3 validation, wall coherency, and `debug_render()` stub.
-- **Developer B (System/Integration Engineer):** CLI entry point, config parsing, BFS solver, terminal and graphical UIs, output file writing, `MockGenerator` stub, and this README.
+---
 
-## AI Usage
+## Features
 
-This project was developed with assistance from an AI coding assistant (Antigravity / Gemini). The AI helped with:
+The project supports multiple generation algorithms, perfect maze generation, deterministic output via seed, shortest path computation, and both terminal and graphical visualization. It also includes interactive controls such as regenerating the maze, toggling the solution path, and adjusting display properties like colors.
 
-- Architecture planning and file structure
-- Implementation of the Recursive Backtracker algorithm
-- BFS solver logic
-- Hex bitwise encoding and wall-coherency validation
-- Terminal and pygame rendering code
-- Test scaffolding and Makefile targets
+---
 
-All generated code was reviewed and integrated by the development team.
+## Team & Project Management
 
-## License
+```mermaid
+flowchart LR
+    A[Programmer A] -->|Generates maze| B[mazegen]
+    C[Programmer B] -->|Parses config| D[main.py]
+    C -->|Displays maze| E[UI]
+    C -->|Solves maze| F[Solver]
+```
 
-MIT
->>>>>>> fde0c09 (Initial commit: basic project structure)
+### Roles
+
+The project was developed collaboratively with a clear separation of responsibilities. Programmer A focused on the core logic, implementing the maze generation algorithms, bitwise wall encoding, and the reusable `mazegen` module. Programmer B handled integration aspects, including configuration parsing, solver implementation, visualization (terminal and graphical), and output formatting.
+
+### Planning and Evolution
+
+The project started with a minimal generator implementation and progressively evolved through integration phases. After establishing the core logic, the solver and output format were added, followed by visualization and interaction features. Finally, support for multiple algorithms and additional refinements were introduced.
+
+### What Worked Well / Improvements
+
+The modular structure and clear separation of concerns allowed efficient collaboration and integration. The reusable design proved effective and scalable. However, improvements could be made by adding more generation algorithms, enhancing the graphical interface, and optimizing performance for larger mazes.
+
+### Tools Used
+
+The project was developed using Python 3.10+, with `flake8` for linting and `mypy` for static type checking. A Makefile was used to automate common tasks such as running, debugging, and validating the project.
+
+---
+
+## Resources
+
+### References
+
+The project is based on classical maze generation and graph theory concepts, including Recursive Backtracking (DFS), Prim’s Algorithm, and shortest path computation using graph traversal techniques.
+
+https://www.youtube.com/watch?v=ioUl1M77hww - Explore maze generation  DFS, Hunt and Kill, Prim's Maze, and Shift Origin
+https://docs.python.org/3/library/index.html - Python docs
+
+
+### AI Usage
+
+AI tools were used to assist with structuring documentation, validating architectural decisions, and refining explanations. All generated content was reviewed, tested, and fully understood before integration.
+
+---
+
+## Conclusion
+
+This project demonstrates a complete pipeline from configuration parsing to maze generation, solving, visualization, and export. It highlights modular design, algorithmic understanding, and practical software engineering in Python.

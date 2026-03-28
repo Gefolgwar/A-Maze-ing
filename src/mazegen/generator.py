@@ -1,7 +1,7 @@
 """Core maze generator: Recursive Backtracker, Prim's, hex encoding."""
 
 import random
-from typing import List, Optional, Set, Tuple
+from typing import List, Optional, Set, Tuple, Generator
 
 from mazegen.patterns import fix_3x3_open, stamp_42_on_grid
 from mazegen.utils import (
@@ -12,8 +12,6 @@ from mazegen.utils import (
     SOUTH,
     WEST,
     Coord,
-    debug_render,
-    debug_render_walls,
     neighbors,
 )
 
@@ -152,7 +150,10 @@ class MazeGenerator:
 
         # If not perfect, add some extra passages for multiple paths.
         if not self.perfect:
-            self._add_extra_passages(rng, count=max(1, (self.width * self.height) // 20))
+            self._add_extra_passages(
+                rng,
+                count=max(1, (self.width * self.height) // 20),
+            )
 
     def _prims_algorithm(self, rng: random.Random) -> None:
         """Carve a perfect maze via Randomized Prim's algorithm.
@@ -205,7 +206,10 @@ class MazeGenerator:
 
         # If not perfect, add some extra passages.
         if not self.perfect:
-            self._add_extra_passages(rng, count=max(1, (self.width * self.height) // 20))
+            self._add_extra_passages(
+                rng,
+                count=max(1, (self.width * self.height) // 20),
+            )
 
     def _add_extra_passages(self, rng: random.Random, count: int) -> None:
         """Remove random walls to create alternative paths (imperfect maze)."""
@@ -281,7 +285,7 @@ class MazeGenerator:
                     s_self: bool = self._grid[r][c][SOUTH]
                     n_neigh: bool = self._grid[r + 1][c][NORTH]
                     if s_self != n_neigh:
-                        agreed: bool = s_self and n_neigh  # keep wall if both say wall
+                        agreed: bool = s_self and n_neigh
                         self._grid[r][c][SOUTH] = agreed
                         self._grid[r + 1][c][NORTH] = agreed
                 # Check east neighbor.
@@ -346,7 +350,7 @@ class MazeGenerator:
     # Step-by-step generation (for animation)
     # ------------------------------------------------------------------
 
-    def iter_generation(self) -> "List[List[int]]":  # type: ignore[override]
+    def iter_generation(self) -> Generator[List[List[int]], None, None]:
         """Yield hex-grid snapshots step-by-step for animated rendering.
 
         Resets the internal grid, runs setup (shape mask + 42 stamp),
@@ -394,9 +398,8 @@ class MazeGenerator:
         self._hex_cache = None
         yield self.to_hex_format()
 
-    def _backtracker_steps(
-        self, rng: random.Random
-    ) -> "List[List[int]]":  # type: ignore[override]
+    def _backtracker_steps(self, rng: random.Random
+                           ) -> Generator[List[List[int]], None, None]:
         """Step generator: Recursive Backtracker, one yield per carve."""
         visited: Set[Tuple[int, int]] = set(self._blocked) | self._outside
         start: Optional[Coord] = self._find_unblocked(0, 0)
@@ -431,9 +434,8 @@ class MazeGenerator:
             self._hex_cache = None
             yield self.to_hex_format()
 
-    def _prims_steps(
-        self, rng: random.Random
-    ) -> "List[List[int]]":  # type: ignore[override]
+    def _prims_steps(self, rng: random.Random
+                     ) -> Generator[List[List[int]], None, None]:
         """Step generator: Randomized Prim's, one yield per carve."""
         visited: Set[Tuple[int, int]] = set(self._blocked) | self._outside
         start: Optional[Coord] = self._find_unblocked(0, 0)
@@ -494,15 +496,3 @@ class MazeGenerator:
     def outside_cells(self) -> Set[Tuple[int, int]]:
         """Cells outside the chosen shape (rendered blank)."""
         return set(self._outside)
-
-    # ------------------------------------------------------------------
-    # Debug helpers
-    # ------------------------------------------------------------------
-
-    def debug_render(self) -> None:
-        """Print the hex grid to the terminal (Developer A stub)."""
-        debug_render(self.to_hex_format())
-
-    def debug_render_walls(self) -> None:
-        """Print the maze with ASCII box-drawing walls."""
-        debug_render_walls(self.to_hex_format())

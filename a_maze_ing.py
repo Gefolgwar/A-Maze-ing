@@ -12,45 +12,11 @@ Usage::
 import configparser
 import os
 import sys
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple, Any
 
 from mazegen import MazeGenerator
 from solver.pathfinder import solve as solve_maze
 from ui.terminal import TerminalUI
-
-# ---------------------------------------------------------------------------
-# MockGenerator (Developer B stub — used when the real generator is absent)
-# ---------------------------------------------------------------------------
-
-
-class MockGenerator:
-    """Hardcoded 5×5 maze for UI/solver development without the real generator.
-
-    The mock returns a pre-built hex grid so the CLI, solver, and UI
-    can be developed and tested independently of the core algorithm.
-    """
-
-    def __init__(self) -> None:
-        self.width: int = 5
-        self.height: int = 5
-        # A simple 5×5 perfect maze encoded in hex.
-        self._hex_grid: List[List[int]] = [
-            [0x9, 0x3, 0x5, 0x5, 0x7],
-            [0xA, 0x9, 0x6, 0xC, 0x3],
-            [0xA, 0xC, 0x3, 0xD, 0x2],
-            [0xA, 0xD, 0x2, 0xC, 0x2],
-            [0xC, 0x5, 0x6, 0xD, 0x6],
-        ]
-
-    def to_hex_format(self) -> List[List[int]]:
-        """Return the hardcoded hex grid."""
-        return self._hex_grid
-
-    def to_hex_string(self) -> str:
-        """Return the hex grid as a string."""
-        return "\n".join(
-            "".join(f"{v:X}" for v in row) for row in self._hex_grid
-        )
 
 
 # ---------------------------------------------------------------------------
@@ -132,6 +98,143 @@ def _parse_coord(text: str) -> Tuple[int, int]:
     col: int = int(parts[0].strip())
     row: int = int(parts[1].strip())
     return (row, col)
+
+
+def _compute_diamond_outside(
+    width: int, height: int
+) -> Set[Tuple[int, int]]:
+    """Return cells outside the diamond shape.
+
+    Uses the same algorithm as ``MazeGenerator._compute_diamond_outside``
+    so validation matches actual generation.
+    """
+    half_h: int = height // 2
+    half_w: int = width // 2
+    radius: int = min(half_h, half_w)
+    cr: int = height // 2
+    cc: int = width // 2
+    outside: Set[Tuple[int, int]] = set()
+    for r in range(height):
+        for c in range(width):
+            if abs(r - cr) + abs(c - cc) > radius:
+                outside.add((r, c))
+    return outside
+
+
+def _diamond_border_cells(
+    width: int, height: int
+) -> List[Tuple[int, int]]:
+    """Return border cells of the diamond (sorted top→bottom, left→right).
+
+    A border cell is inside the diamond and has at least one neighbor
+    outside the diamond or on the grid edge.
+    """
+    outside: Set[Tuple[int, int]] = _compute_diamond_outside(width, height)
+    border: List[Tuple[int, int]] = []
+    for r in range(height):
+        for c in range(width):
+            if (r, c) in outside:
+                continue
+            # Check if on grid edge or adjacent to an outside cell.
+            on_edge: bool = (
+                r == 0 or r == height - 1 or c == 0 or c == width - 1
+            )
+            has_outside_neighbor: bool = any(
+                (r + dr, c + dc) in outside
+                for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]
+            )
+            if on_edge or has_outside_neighbor:
+                border.append((r, c))
+    return border
+
+
+def _validate_coord(
+    label: str,
+    coord: Tuple[int, int],
+    width: int,
+    height: int,
+    shape: str,
+) -> Tuple[int, int]:
+    """Validate that *coord* is inside the maze for the given *shape*.
+
+    For **rectangle**: raises ``SystemExit`` if out of grid bounds.
+
+    For **diamond**: if the coordinate is outside the diamond shape,
+    prints a warning with allowed border coordinates, auto-corrects
+    to a default diamond vertex, and returns the corrected coordinate.
+
+    Args:
+        label: Human name for the coordinate (``"ENTRY"`` / ``"EXIT"``).
+        coord: ``(row, col)``.
+        width: Maze width.
+        height: Maze height.
+        shape: ``"rectangle"`` or ``"diamond"``.
+
+    Returns:
+        The (possibly adjusted) ``(row, col)`` coordinate.
+    """
+    row, col = coord
+
+    # 1. Basic grid bounds (applies to both shapes).
+    if not (0 <= row < height and 0 <= col < width):
+        if shape == "diamond":
+            cr: int = height // 2
+            cc: int = width // 2
+            radius: int = min(height // 2, width // 2)
+            border = _diamond_border_cells(width, height)
+            border_str = ", ".join(
+                f"({c},{r})" for r, c in border
+            )
+            print(
+                f"Error: {label} coordinate ({col},{row}) is out of "
+                f"bounds.\n"
+                f"  Allowed range: col 0..{width - 1}, "
+                f"row 0..{height - 1}\n"
+                f"  For diamond shape, allowed cells also satisfy: "
+                f"|row - {cr}| + |col - {cc}| <= {radius}\n"
+                f"  Diamond border cells (col,row): {border_str}",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                f"Error: {label} coordinate ({col},{row}) is out of "
+                f"bounds.\n"
+                f"  Allowed range for rectangle: "
+                f"col 0..{width - 1}, row 0..{height - 1}",
+                file=sys.stderr,
+            )
+        sys.exit(1)
+
+    # 2. Diamond-specific check.
+    if shape == "diamond":
+        outside: Set[Tuple[int, int]] = _compute_diamond_outside(
+            width, height
+        )
+        if (row, col) in outside:
+            cr = height // 2
+            cc = width // 2
+            radius = min(height // 2, width // 2)
+            border = _diamond_border_cells(width, height)
+            border_str = ", ".join(
+                f"({c},{r})" for r, c in border
+            )
+            # Auto-correct: ENTRY → top vertex, EXIT → bottom vertex.
+            if label == "ENTRY":
+                new_coord: Tuple[int, int] = (0, cc)
+            else:
+                new_coord = (height - 1, cc)
+            print(
+                f"Warning: {label} coordinate ({col},{row}) is outside "
+                f"the diamond shape.\n"
+                f"  Allowed cells satisfy: "
+                f"|row - {cr}| + |col - {cc}| <= {radius}\n"
+                f"  Diamond border cells (col,row): {border_str}\n"
+                f"  {label} changed to ({new_coord[1]},{new_coord[0]})",
+                file=sys.stderr,
+            )
+            return new_coord
+
+    return coord
 
 
 # ---------------------------------------------------------------------------
@@ -221,13 +324,28 @@ def main() -> None:
     try:
         width: int = int(config["WIDTH"])
     except ValueError:
-        print(f"Error: WIDTH must be an integer, got {config['WIDTH']!r}", file=sys.stderr)
+        print(f"Error: WIDTH must be an integer, got {config['WIDTH']!r}",
+              file=sys.stderr)
         sys.exit(1)
 
     try:
         height: int = int(config["HEIGHT"])
     except ValueError:
-        print(f"Error: HEIGHT must be an integer, got {config['HEIGHT']!r}", file=sys.stderr)
+        print(f"Error: HEIGHT must be an integer, got {config['HEIGHT']!r}",
+              file=sys.stderr)
+        sys.exit(1)
+    # Check WIDTH HEIGHT too small
+    MIN_SIZE, MAX_SIZE = 5, 100
+    if (
+        not (MIN_SIZE <= width <= MAX_SIZE)
+        or not (MIN_SIZE <= height <= MAX_SIZE)
+    ):
+        print(
+            f"Error: Maze dimensions must be between"
+            f" {MIN_SIZE} and {MAX_SIZE}.\n"
+            f"  Got: WIDTH={width}, HEIGHT={height}",
+            file=sys.stderr
+        )
         sys.exit(1)
 
     _perfect_raw: str = config["PERFECT"].strip().lower()
@@ -240,6 +358,17 @@ def main() -> None:
         sys.exit(1)
     perfect: bool = _perfect_raw in ("true", "1", "yes")
 
+    # --- Shape (optional, defaults to "rectangle") --------------------------
+    _shape_raw: str = config.get("SHAPE", "rectangle").strip().lower()
+    if _shape_raw not in ("rectangle", "diamond"):
+        print(
+            f"Error: SHAPE must be 'rectangle' or 'diamond', "
+            f"got {config.get('SHAPE', '')!r}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    initial_shape: str = _shape_raw
+
     try:
         entry: Tuple[int, int] = _parse_coord(config["ENTRY"])
     except ValueError as exc:
@@ -251,6 +380,20 @@ def main() -> None:
     except ValueError as exc:
         print(f"Error: invalid EXIT coordinate: {exc}", file=sys.stderr)
         sys.exit(1)
+    # Check Enter <> Exit
+    if entry == exit_cell:
+        entry = (0, 0)
+        exit_cell = (height - 1, width - 1)
+        print(
+            f"Warning: ENTRY and EXIT were identical. Auto-corrected to:\n"
+            f"  ENTRY -> (0,0), EXIT -> ({width-1},{height-1})",
+            file=sys.stderr
+        )
+
+    # Validate that entry/exit are inside the maze for the chosen shape.
+    entry = _validate_coord("ENTRY", entry, width, height, initial_shape)
+    exit_cell = _validate_coord(
+        "EXIT", exit_cell, width, height, initial_shape)
 
     output_path: str = config["OUTPUT_FILE"]
 
@@ -258,7 +401,8 @@ def main() -> None:
     try:
         _seed: List[int] = [int(config["SEED"])]
     except ValueError:
-        print(f"Error: SEED must be an integer, got {config['SEED']!r}", file=sys.stderr)
+        print(f"Error: SEED must be an integer, got {config['SEED']!r}",
+              file=sys.stderr)
         sys.exit(1)
     # Mutable algorithm — toggled on "Change algorithm" action.
     _algo: List[str] = ["backtracker"]
@@ -267,7 +411,7 @@ def main() -> None:
         "prims": "Prim's",
     }
     # Mutable shape — toggled on "Change shape" action.
-    _shape: List[str] = ["rectangle"]
+    _shape: List[str] = [initial_shape]
     _SHAPE_LABELS: Dict[str, str] = {
         "rectangle": "Rectangle",
         "diamond": "Diamond",
@@ -298,7 +442,7 @@ def main() -> None:
             Set[Tuple[int, int]],
         ]
     ]:
-        """Run the generator and solver; return (grid, sol, blocked, outside)."""
+        """Run generator and solver; return (grid, sol, blocked, outside)."""
         eff_entry: Tuple[int, int] = _entry[0]
         eff_exit: Tuple[int, int] = _exit[0]
         try:
@@ -343,7 +487,8 @@ def main() -> None:
         new_grid, new_sol, new_blocked, new_outside = res
         new_sol_str: Optional[str] = solve_maze(new_grid, _entry[0], _exit[0])
         try:
-            write_output(output_path, new_grid, _entry[0], _exit[0], new_sol_str)
+            write_output(output_path, new_grid, _entry[0], _exit[0],
+                         new_sol_str)
         except OSError:
             pass
         return new_grid, new_sol, new_blocked, new_outside
@@ -358,21 +503,23 @@ def main() -> None:
         new_grid, new_sol, new_blocked, new_outside = res
         new_sol_str: Optional[str] = solve_maze(new_grid, _entry[0], _exit[0])
         try:
-            write_output(output_path, new_grid, _entry[0], _exit[0], new_sol_str)
+            write_output(output_path, new_grid, _entry[0], _exit[0],
+                         new_sol_str)
         except OSError:
             pass
-        return new_grid, new_sol, new_blocked, new_outside, _ALGO_LABELS[_algo[0]]
+        return (new_grid, new_sol, new_blocked, new_outside,
+                _ALGO_LABELS[_algo[0]])
 
     def change_shape_callback() -> Optional[tuple]:  # type: ignore[type-arg]
-        """Toggle shape; auto-adjust entry/exit for diamond; return 7-tuple."""
+        """Toggle shape; validate entry/exit for diamond; return 7-tuple."""
         _shape[0] = "diamond" if _shape[0] == "rectangle" else "rectangle"
-        if _shape[0] == "diamond":
-            # Use top / bottom vertices of the diamond.
-            _entry[0] = (0, width // 2)
-            _exit[0] = (height - 1, width // 2)
-        else:
-            _entry[0] = _orig_entry
-            _exit[0] = _orig_exit
+        # Always start from config values; validate against new shape.
+        _entry[0] = _validate_coord(
+            "ENTRY", _orig_entry, width, height, _shape[0]
+        )
+        _exit[0] = _validate_coord(
+            "EXIT", _orig_exit, width, height, _shape[0]
+        )
         _seed[0] += 1
         res = _generate_and_solve(_seed[0])
         if res is None:
@@ -380,7 +527,8 @@ def main() -> None:
         new_grid, new_sol, new_blocked, new_outside = res
         new_sol_str: Optional[str] = solve_maze(new_grid, _entry[0], _exit[0])
         try:
-            write_output(output_path, new_grid, _entry[0], _exit[0], new_sol_str)
+            write_output(output_path, new_grid, _entry[0], _exit[0],
+                         new_sol_str)
         except OSError:
             pass
         return (
@@ -390,7 +538,7 @@ def main() -> None:
 
     # --- Animation callbacks (graphical UI only) ----------------------------
 
-    def _make_anim_iter(seed: int) -> Optional[tuple]:  # type: ignore[type-arg]
+    def _make_anim_iter(seed: int) -> Optional[Tuple[Any, ...]]:
         """Create a step iterator for animated generation.
 
         Returns an 8-tuple:
@@ -427,14 +575,15 @@ def main() -> None:
         return _make_anim_iter(_seed[0])
 
     def anim_shape_cb() -> Optional[tuple]:  # type: ignore[type-arg]
-        """Toggle shape, adjust entry/exit, bump seed, return 8-tuple."""
+        """Toggle shape, validate entry/exit, bump seed, return 8-tuple."""
         _shape[0] = "diamond" if _shape[0] == "rectangle" else "rectangle"
-        if _shape[0] == "diamond":
-            _entry[0] = (0, width // 2)
-            _exit[0] = (height - 1, width // 2)
-        else:
-            _entry[0] = _orig_entry
-            _exit[0] = _orig_exit
+        # Always start from config values; validate against new shape.
+        _entry[0] = _validate_coord(
+            "ENTRY", _orig_entry, width, height, _shape[0]
+        )
+        _exit[0] = _validate_coord(
+            "EXIT", _orig_exit, width, height, _shape[0]
+        )
         _seed[0] += 1
         return _make_anim_iter(_seed[0])
 
@@ -476,7 +625,8 @@ def main() -> None:
             )
             gui.run()
         except ImportError:
-            print("MLX not available, falling back to terminal.", file=sys.stderr)
+            print("MLX not available, falling back to terminal.",
+                  file=sys.stderr)
             display_mode = "terminal"
 
     if display_mode == "terminal":
