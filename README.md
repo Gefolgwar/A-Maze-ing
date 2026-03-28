@@ -1,4 +1,4 @@
-*This project has been created as part of the 42 curriculum by <login1>, <login2>.*
+*This project has been created as part of the 42 curriculum by <psviatus>, <ndabija>.*
 
 # A-Maze-ing
 
@@ -27,7 +27,12 @@ The system is organized into independent components. The `mazegen` module handle
 ---
 
 ## Instructions
-
+before install activate virtual envirement 
+```bash
+python3 -m vemv .venv
+source .venv/bin/activate
+```
+Need to install MLX lib separately.
 ### Run
 
 ```bash
@@ -36,12 +41,15 @@ python3 a_maze_ing.py config.txt
 
 ### Makefile
 
+
 ```bash
-make install
-make run
-make debug
-make clean
-make lint
+make install - Install project dependencies using pip, uv, pipx, or any other package.
+manager of your choice.
+make run -  Execute the main script of your project
+make debug - Run the main script in debug mode using Python’s built-in debugger
+make clean - Remove temporary files or caches.
+make lint - Execute the commands flake8 and mypy
+make lint-strict - Execute the commands flake8 and mypy strict
 ```
 
 ---
@@ -118,12 +126,10 @@ The project supports multiple generation algorithms, perfect maze generation, de
 
 ```mermaid
 flowchart LR
-    A[Programmer A\nAlgorithm] --> B[mazegen]
-    B --> C[data]
-    C --> D[Programmer B\nIntegration]
-    D --> E[solver]
-    D --> F[ui]
-    D --> G[output]
+    A[Programmer A] -->|Generates maze| B[mazegen]
+    C[Programmer B] -->|Parses config| D[main.py]
+    C -->|Displays maze| E[UI]
+    C -->|Solves maze| F[Solver]
 ```
 
 ### Roles
@@ -149,6 +155,10 @@ The project was developed using Python 3.10+, with `flake8` for linting and `myp
 ### References
 
 The project is based on classical maze generation and graph theory concepts, including Recursive Backtracking (DFS), Prim’s Algorithm, and shortest path computation using graph traversal techniques.
+
+https://www.youtube.com/watch?v=ioUl1M77hww - Explore maze generation  DFS, Hunt and Kill, Prim's Maze, and Shift Origin
+https://docs.python.org/3/library/index.html - Python docs
+
 
 ### AI Usage
 
