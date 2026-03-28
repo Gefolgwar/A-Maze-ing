@@ -336,9 +336,13 @@ def main() -> None:
         sys.exit(1)
     # Check WIDTH HEIGHT too small
     MIN_SIZE, MAX_SIZE = 5, 100
-    if not (MIN_SIZE <= width <= MAX_SIZE) or not (MIN_SIZE <= height <= MAX_SIZE):
+    if (
+        not (MIN_SIZE <= width <= MAX_SIZE)
+        or not (MIN_SIZE <= height <= MAX_SIZE)
+    ):
         print(
-            f"Error: Maze dimensions must be between {MIN_SIZE} and {MAX_SIZE}.\n"
+            f"Error: Maze dimensions must be between"
+            f" {MIN_SIZE} and {MAX_SIZE}.\n"
             f"  Got: WIDTH={width}, HEIGHT={height}",
             file=sys.stderr
         )
@@ -376,8 +380,7 @@ def main() -> None:
     except ValueError as exc:
         print(f"Error: invalid EXIT coordinate: {exc}", file=sys.stderr)
         sys.exit(1)
-	
-	# Check Enter <> Exit
+    # Check Enter <> Exit
     if entry == exit_cell:
         entry = (0, 0)
         exit_cell = (height - 1, width - 1)
@@ -389,7 +392,8 @@ def main() -> None:
 
     # Validate that entry/exit are inside the maze for the chosen shape.
     entry = _validate_coord("ENTRY", entry, width, height, initial_shape)
-    exit_cell = _validate_coord("EXIT", exit_cell, width, height, initial_shape)
+    exit_cell = _validate_coord(
+        "EXIT", exit_cell, width, height, initial_shape)
 
     output_path: str = config["OUTPUT_FILE"]
 

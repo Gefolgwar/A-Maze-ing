@@ -496,4 +496,3 @@ class MazeGenerator:
     def outside_cells(self) -> Set[Tuple[int, int]]:
         """Cells outside the chosen shape (rendered blank)."""
         return set(self._outside)
-
